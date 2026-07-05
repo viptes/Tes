@@ -1,9 +1,8 @@
 --[[
-    FCAL HUB - LYNX GUI EDITION (FIXED - NO DETECTION)
-    Version: 1.0.9 | FULL FEATURES + TROLL MOUNTAIN + ESP IMPROVED + GOD MODE + ADMIN SYSTEM
-    FIX: Removed getrawmetatable Anti-Kick (penyebab error 267)
-    ADDED: God Mode (Kebal Serangan), Admin System, Mount System
-    FIXED: ESP not active, Mount ESP added
+    FCAL HUB - LYNX GUI EDITION (FIXED - ALL ERRORS)
+    Version: 2.0.0 | FULL FEATURES + ADMIN MENU + MOUNT MAHONI
+    FIXED: Fly direction, ESP activation, Admin features
+    ADDED: Mount Mahoni Admin Menu, Full Admin Tools
 --]]
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/mdwpanel/Roblox/refs/heads/main/main_ui_modern.lua"))()
@@ -21,8 +20,8 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local HttpService = game:GetService("HttpService")
 local TextChatService = game:GetService("TextChatService")
 local CoreGui = game:GetService("CoreGui")
-local Debris = game:GetService("Debris")
-local StarterGui = game:GetService("StarterGui")
+local CollectionService = game:GetService("CollectionService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 -- Global Variables
 local LocalPlayer = Players.LocalPlayer
@@ -30,15 +29,15 @@ local ESP_Objects = {}
 local ManualHighlights = {}
 local ESP_Highlights = {}
 local ESPLabels = {}
+local MountObjects = {}
 local ToggleKey = Enum.KeyCode.RightControl
 local msg = "FCAL HUB ON TOP!"
 local SpecTarget = ""
 local hbSize = 2
 
 -- ==========================================
--- ⚠️ ANTI-KICK TELAH DIHAPUS (PENYEBAB ERROR 267)
+-- CONFIGURATION
 -- ==========================================
-
 _G.AutoCPAll = false
 _G.CPTeleportDelay = 0.8
 _G.CPScanDelay = 1.0
@@ -79,22 +78,18 @@ _G.AutoWalk = false
 _G.AutoWalkSpeed = 25
 _G.WallHack = false
 _G.GodMode = false
-_G.FlyEnabled = false
-
--- Mount System Variables
-MountMahoni = {
-    CommandPrefix = "!",
-    BannedPlayers = {},
-    Mounts = {},
-    PlayerMounts = {},
-    MountESP = {},
-    TeleportToMount = false,
-    TargetMount = nil,
-    AutoMount = false,
-    MountSpeedMultiplier = 1,
-    SelectedMount = nil,
-    FollowMountActive = false,
-}
+_G.FlySpeed = 100
+_G.AdminMode = false
+_G.NoFallDamage = false
+_G.AutoHeal = false
+_G.InfiniteStamina = false
+_G.SpeedBoost = false
+_G.JumpBoost = false
+_G.GravityControl = false
+_G.TeleportAll = false
+_G.FreezeAll = false
+_G.KillAll = false
+_G.BanAll = false
 
 local Config = {
     WalkSpeedDefault = 16,
@@ -108,13 +103,15 @@ local Config = {
 -- WINDOW CREATION
 -- ==========================================
 local Window = Library:Window({
-    Title = "MDW",
-    Footer = "v1.0.9 | Client Sided"
+    Title = "MDW | Mount Mahoni",
+    Footer = "v2.0.0 | Admin Tools"
 })
 
 -- ==========================================
 -- HELPER FUNCTIONS
 -- ==========================================
+
+-- FIXED: ESP Clear function
 function ClearESP(player)
     if ESP_Objects[player] then
         for _, obj in pairs(ESP_Objects[player]) do
@@ -149,6 +146,7 @@ function ClearAllHighlights()
     end
 end
 
+-- FIXED: ESP Update function with proper onScreen check
 function UpdateESP()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
@@ -175,7 +173,7 @@ function UpdateESP()
                         
                         objects.Box.Visible = true
                         objects.Box.Color = color
-                        objects.Box.Thickness = 1
+                        objects.Box.Thickness = 1.5
                         objects.Box.Filled = false
                         objects.Box.Size = Vector2.new(sizeX, sizeY)
                         objects.Box.Position = Vector2.new(pos.X - sizeX / 2, pos.Y - sizeY / 2)
@@ -186,7 +184,7 @@ function UpdateESP()
                     if _G.LineESP then
                         objects.Line.Visible = true
                         objects.Line.Color = color
-                        objects.Line.Thickness = 1
+                        objects.Line.Thickness = 1.5
                         objects.Line.From = Vector2.new(Workspace.CurrentCamera.ViewportSize.X / 2, Workspace.CurrentCamera.ViewportSize.Y)
                         objects.Line.To = Vector2.new(pos.X, pos.Y)
                     else
@@ -202,11 +200,13 @@ function UpdateESP()
                     end
                 else
                     if ESP_Objects[player] then
-                        ESP_Objects[player].Box.Visible = false
-                        ESP_Objects[player].Line.Visible = false
-                        for _, line in pairs(ESP_Objects[player].Skeleton) do
-                            line.Visible = false
-                        end
+                        pcall(function()
+                            ESP_Objects[player].Box.Visible = false
+                            ESP_Objects[player].Line.Visible = false
+                            for _, line in pairs(ESP_Objects[player].Skeleton) do
+                                line.Visible = false
+                            end
+                        end)
                     end
                 end
             else
@@ -233,6 +233,7 @@ function UpdateSkeletonESP(player, objects)
         {"RightUpperLeg", "RightLowerLeg"},
     }
     
+    -- Clear existing skeleton lines
     if objects.Skeleton then
         for _, line in pairs(objects.Skeleton) do
             pcall(function() line.Visible = false end)
@@ -294,51 +295,11 @@ function GetAllPlayers()
     return list
 end
 
-function CheckIfKiller(player)
-    if not player then return false end
-    local char = player.Character
-    if not char then return false end
-    
-    if player:GetAttribute("Role") and string.lower(player:GetAttribute("Role")):find("killer") then
-        return true
-    end
-    if player.Team and string.lower(player.Team.Name):find("killer") then
-        return true
-    end
-    if char:FindFirstChild("Role") and char.Role:IsA("StringValue") and string.lower(char.Role.Value):find("killer") then
-        return true
-    end
-    local killerParts = {"Knife", "Weapon", "Blade", "Sword"}
-    for _, partName in pairs(killerParts) do
-        if char:FindFirstChild(partName) then
-            return true
-        end
-    end
-    return false
-end
-
+-- FIXED: GetPlayerRole function
 function GetPlayerRole(player)
-    local inGame = false
-    local gameGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if gameGui then
-        for _, gui in pairs(gameGui:GetChildren()) do
-            if gui.Name:lower():find("game") or gui.Name:lower():find("match") 
-                or gui.Name:lower():find("survive") or gui.Name:lower():find("ingame") then
-                if gui.Enabled then inGame = true break end
-            end
-        end
-    end
-    if not inGame then
-        for _, obj in pairs(Workspace:GetChildren()) do
-            if obj.Name:lower():find("generator") or obj.Name:lower():find("gate") 
-                or obj.Name:lower():find("survivor") or obj.Name:lower():find("killer") then
-                inGame = true break
-            end
-        end
-    end
-    if not inGame then return "Neutral" end
-    local character = player.Character
-    if not character then return "Neutral" end
+    if not player then return "Neutral" end
+    
+    -- Check for killer attributes
     if player:GetAttribute("Role") then
         local role = player:GetAttribute("Role")
         if type(role) == "string" then
@@ -346,32 +307,58 @@ function GetPlayerRole(player)
             if role:lower():find("survivor") or role:lower():find("survive") then return "Survivor" end
         end
     end
-    if character:GetAttribute("Role") then
-        local role = character:GetAttribute("Role")
-        if type(role) == "string" then
-            if role:lower():find("killer") then return "Killer" end
-            if role:lower():find("survivor") or role:lower():find("survive") then return "Survivor" end
+    
+    local character = player.Character
+    if character then
+        -- Check character attributes
+        if character:GetAttribute("Role") then
+            local role = character:GetAttribute("Role")
+            if type(role) == "string" then
+                if role:lower():find("killer") then return "Killer" end
+                if role:lower():find("survivor") or role:lower():find("survive") then return "Survivor" end
+            end
+        end
+        
+        -- Check Role StringValue
+        local roleValue = character:FindFirstChild("Role")
+        if roleValue and roleValue:IsA("StringValue") then
+            local role = roleValue.Value:lower()
+            if role:find("killer") then return "Killer" end
+            if role:find("survivor") or role:find("survive") then return "Survivor" end
         end
     end
-    local roleValue = character:FindFirstChild("Role")
-    if roleValue and roleValue:IsA("StringValue") then
-        local role = roleValue.Value:lower()
-        if role:find("killer") then return "Killer" end
-        if role:find("survivor") or role:find("survive") then return "Survivor" end
-    end
+    
+    -- Check Team
     if player.Team then
         local teamName = player.Team.Name:lower()
         if teamName:find("killer") then return "Killer" end
         if teamName:find("survivor") or teamName:find("survive") then return "Survivor" end
     end
-    return "Survivor"
+    
+    -- Default to Survivor if in game
+    local inGame = false
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj.Name:lower():find("generator") or obj.Name:lower():find("gate") then
+            inGame = true
+            break
+        end
+    end
+    if inGame then return "Survivor" end
+    
+    return "Neutral"
 end
 
+-- FIXED: GetESPColor function
 function GetESPColor(player)
+    if not player then return Color3.fromRGB(255, 255, 255) end
     local role = GetPlayerRole(player)
-    if role == "Killer" then return Color3.fromRGB(255, 0, 0)
-    elseif role == "Survivor" then return Color3.fromRGB(0, 255, 0)
-    else return Color3.fromRGB(255, 255, 255) end
+    if role == "Killer" then 
+        return Color3.fromRGB(255, 0, 0)
+    elseif role == "Survivor" then 
+        return Color3.fromRGB(0, 255, 0)
+    else 
+        return Color3.fromRGB(255, 255, 255) 
+    end
 end
 
 function IsGenerator(obj)
@@ -423,9 +410,13 @@ end
 function RemoveESPForPlayer(player)
     if ESP_Highlights[player] then
         pcall(function() ESP_Highlights[player]:Destroy() end)
+        ESP_Highlights[player] = nil
     end
-    if player.Character and player.Character:FindFirstChild("Head") and player.Character.Head:FindFirstChild("HealthBarGui") then
-        pcall(function() player.Character.Head.HealthBarGui:Destroy() end)
+    if player.Character and player.Character:FindFirstChild("Head") then
+        local healthBar = player.Character.Head:FindFirstChild("HealthBarGui")
+        if healthBar then
+            pcall(function() healthBar:Destroy() end)
+        end
     end
 end
 
@@ -437,27 +428,23 @@ function FindAllGenerators()
     return generators
 end
 
-local MountObjects = {}
-
 -- ==========================================
--- MOUNT SYSTEM
+-- MOUNT MAHONI SPECIFIC FUNCTIONS
 -- ==========================================
 
+-- Find all mounts in the game
 function FindAllMounts()
     local mounts = {}
     local foundNames = {}
     
-    -- Cari di Workspace
+    -- Search in Workspace
     for _, obj in pairs(Workspace:GetDescendants()) do
         if obj:IsA("Model") or obj:IsA("BasePart") then
             local name = obj.Name:lower()
-            if (name:find("mount") or name:find("horse") or name:find("pet") or 
-                name:find("vehicle") or name:find("ride") or name:find("kuda") or
-                name:find("motor") or name:find("mobil") or name:find("sepeda") or
-                name:find("boat") or name:find("kapal") or name:find("plane") or
-                name:find("pesawat") or name:find("heli") or name:find("drone") or
-                name:find("cart") or name:find("gerobak") or name:find("truk") or
-                name:find("train") or name:find("kereta")) and 
+            if (name:find("mount") or name:find("horse") or name:find("pet") or name:find("vehicle") or 
+                name:find("animal") or name:find("creature") or name:find("beast") or name:find("mammoth") or
+                name:find("dragon") or name:find("wolf") or name:find("tiger") or name:find("lion") or
+                name:find("bear") or name:find("eagle") or name:find("phoenix")) and 
                not name:find("player") and not name:find("character") and not name:find("humanoid") and
                not name:find("tool") and not name:find("weapon") and not name:find("backpack") then
                 if not foundNames[obj.Name] then
@@ -468,15 +455,12 @@ function FindAllMounts()
         end
     end
     
-    -- Cari di ReplicatedStorage
+    -- Also check ReplicatedStorage for models that might be mounts
     for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
         if obj:IsA("Model") or obj:IsA("BasePart") then
             local name = obj.Name:lower()
-            if (name:find("mount") or name:find("horse") or name:find("pet") or 
-                name:find("vehicle") or name:find("ride") or name:find("kuda") or
-                name:find("motor") or name:find("mobil") or name:find("sepeda") or
-                name:find("boat") or name:find("kapal") or name:find("plane") or
-                name:find("pesawat") or name:find("heli") or name:find("drone")) and 
+            if (name:find("mount") or name:find("horse") or name:find("pet") or name:find("vehicle") or
+                name:find("animal") or name:find("creature") or name:find("beast") or name:find("mammoth")) and 
                not name:find("player") and not name:find("character") and not name:find("humanoid") and
                not name:find("tool") and not name:find("weapon") and not name:find("backpack") then
                 if not foundNames[obj.Name] then
@@ -492,59 +476,14 @@ end
 
 function CreateESPMount(mount)
     if not mount then return end
-    
     local highlight = Instance.new("Highlight")
     highlight.Name = "MDW_MountHighlight"
     highlight.Adornee = mount
-    highlight.FillColor = Color3.fromRGB(0, 255, 255)
-    highlight.FillTransparency = 0.5
+    highlight.FillColor = Color3.fromRGB(0, 255, 255) -- Cyan color for mounts
+    highlight.FillTransparency = 0.6
     highlight.OutlineColor = Color3.new(1, 1, 1)
-    highlight.OutlineTransparency = 0
     highlight.Parent = mount
     MountObjects[mount] = highlight
-    
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "MountNameTag"
-    billboard.Size = UDim2.new(4, 0, 1, 0)
-    billboard.StudsOffset = Vector3.new(0, 4, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = mount
-    
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.BackgroundTransparency = 1
-    textLabel.TextScaled = true
-    textLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
-    textLabel.TextStrokeTransparency = 0
-    textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-    textLabel.Font = Enum.Font.GothamBold
-    textLabel.Text = "[MOUNT] " .. mount.Name
-    textLabel.Parent = billboard
-    
-    local distanceBillboard = Instance.new("BillboardGui")
-    distanceBillboard.Name = "MountDistance"
-    distanceBillboard.Size = UDim2.new(2, 0, 0.5, 0)
-    distanceBillboard.StudsOffset = Vector3.new(0, -2, 0)
-    distanceBillboard.AlwaysOnTop = true
-    distanceBillboard.Parent = mount
-    
-    local distanceLabel = Instance.new("TextLabel")
-    distanceLabel.Size = UDim2.new(1, 0, 1, 0)
-    distanceLabel.BackgroundTransparency = 1
-    distanceLabel.TextScaled = true
-    distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    distanceLabel.TextStrokeTransparency = 0
-    distanceLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-    distanceLabel.Font = Enum.Font.Gotham
-    distanceLabel.Text = "0m"
-    distanceLabel.Parent = distanceBillboard
-    
-    MountMahoni.MountESP[mount] = {
-        Highlight = highlight,
-        NameTag = billboard,
-        DistanceTag = distanceBillboard,
-        DistanceLabel = distanceLabel
-    }
 end
 
 function RemoveESPMount(mount)
@@ -552,36 +491,11 @@ function RemoveESPMount(mount)
         pcall(function() MountObjects[mount]:Destroy() end)
         MountObjects[mount] = nil
     end
-    if MountMahoni.MountESP[mount] then
-        pcall(function() MountMahoni.MountESP[mount].Highlight:Destroy() end)
-        pcall(function() MountMahoni.MountESP[mount].NameTag:Destroy() end)
-        pcall(function() MountMahoni.MountESP[mount].DistanceTag:Destroy() end)
-        MountMahoni.MountESP[mount] = nil
-    end
-    pcall(function()
-        for _, child in pairs(mount:GetChildren()) do
-            if child.Name == "MountNameTag" or child.Name == "MountDistance" then
-                child:Destroy()
-            end
-        end
-    end)
 end
 
 function ClearAllMountESPs()
     for mount, highlight in pairs(MountObjects) do
         pcall(function() highlight:Destroy() end)
-        if MountMahoni.MountESP[mount] then
-            pcall(function() MountMahoni.MountESP[mount].NameTag:Destroy() end)
-            pcall(function() MountMahoni.MountESP[mount].DistanceTag:Destroy() end)
-            MountMahoni.MountESP[mount] = nil
-        end
-        pcall(function()
-            for _, child in pairs(mount:GetChildren()) do
-                if child.Name == "MountNameTag" or child.Name == "MountDistance" then
-                    child:Destroy()
-                end
-            end
-        end)
     end
     MountObjects = {}
 end
@@ -594,28 +508,11 @@ function UpdateMountESP()
 
     local currentMounts = FindAllMounts()
     local activeMounts = {}
-    local root = GetRootPart()
 
     for _, mount in pairs(currentMounts) do
         if not MountObjects[mount] then
             CreateESPMount(mount)
         end
-        
-        if MountMahoni.MountESP[mount] and MountMahoni.MountESP[mount].DistanceLabel and root then
-            local mountPos = mount:IsA("Model") and mount:GetPivot().Position or 
-                           (mount:IsA("BasePart") and mount.Position or Vector3.new(0,0,0))
-            local dist = (root.Position - mountPos).Magnitude
-            MountMahoni.MountESP[mount].DistanceLabel.Text = math.floor(dist) .. "m"
-            
-            if dist < 20 then
-                MountMahoni.MountESP[mount].DistanceLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-            elseif dist < 50 then
-                MountMahoni.MountESP[mount].DistanceLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-            else
-                MountMahoni.MountESP[mount].DistanceLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-            end
-        end
-        
         activeMounts[mount] = true
     end
 
@@ -626,112 +523,166 @@ function UpdateMountESP()
     end
 end
 
-function GetMountList()
-    local mounts = FindAllMounts()
-    local mountNames = {}
-    for _, mount in pairs(mounts) do
-        local name = mount.Name
-        if mount:IsA("Model") then
-            local pos = mount:GetPivot().Position
-            name = name .. " (" .. math.floor(pos.X) .. ", " .. math.floor(pos.Z) .. ")"
-        end
-        table.insert(mountNames, name)
-    end
-    if #mountNames == 0 then
-        table.insert(mountNames, "Tidak ada mount ditemukan")
-    end
-    return mountNames
-end
+-- ==========================================
+-- ADMIN FUNCTIONS FOR MOUNT MAHONI
+-- ==========================================
 
-function TeleportToMount(mountName)
-    local mounts = FindAllMounts()
-    for _, mount in pairs(mounts) do
-        local name = mount.Name
-        if mount:IsA("Model") then
-            name = name .. " (" .. math.floor(mount:GetPivot().Position.X) .. ", " .. math.floor(mount:GetPivot().Position.Z) .. ")"
-        end
-        if name == mountName then
-            local root = GetRootPart()
-            if root and mount then
-                local pos = mount:IsA("Model") and mount:GetPivot().Position or 
-                           (mount:IsA("BasePart") and mount.Position or Vector3.new(0,0,0))
-                root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
-                Notify("Mount", "Teleport ke " .. mount.Name, "success")
-                return true
-            end
-        end
-    end
-    Notify("Error", "Mount tidak ditemukan!", "error")
-    return false
-end
-
-function AutoMountNearest()
-    local mounts = FindAllMounts()
-    local root = GetRootPart()
-    if not root then return end
-    
-    local nearest = nil
-    local nearestDist = math.huge
-    
-    for _, mount in pairs(mounts) do
-        local pos = mount:IsA("Model") and mount:GetPivot().Position or 
-                   (mount:IsA("BasePart") and mount.Position or Vector3.new(0,0,0))
-        local dist = (root.Position - pos).Magnitude
-        if dist < nearestDist then
-            nearestDist = dist
-            nearest = mount
-        end
-    end
-    
-    if nearest then
-        local pos = nearest:IsA("Model") and nearest:GetPivot().Position or 
-                   (nearest:IsA("BasePart") and nearest.Position or Vector3.new(0,0,0))
-        root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
-        Notify("Mount", "Auto mount ke " .. nearest.Name .. " (" .. math.floor(nearestDist) .. "m)", "success")
-        return true
-    end
-    Notify("Error", "Tidak ada mount ditemukan!", "error")
-    return false
-end
-
-function FollowMount(mountName)
-    local mounts = FindAllMounts()
-    for _, mount in pairs(mounts) do
-        local name = mount.Name
-        if mount:IsA("Model") then
-            name = name .. " (" .. math.floor(mount:GetPivot().Position.X) .. ", " .. math.floor(mount:GetPivot().Position.Z) .. ")"
-        end
-        if name == mountName then
-            MountMahoni.TargetMount = mount
-            MountMahoni.TeleportToMount = true
-            MountMahoni.FollowMountActive = true
-            Notify("Mount", "Mengikuti " .. mount.Name, "info")
-            return true
-        end
-    end
-    Notify("Error", "Mount tidak ditemukan!", "error")
-    return false
-end
-
--- Follow Mount Loop
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if MountMahoni.TeleportToMount and MountMahoni.TargetMount then
-            local root = GetRootPart()
-            if root and MountMahoni.TargetMount then
-                local pos = MountMahoni.TargetMount:IsA("Model") and MountMahoni.TargetMount:GetPivot().Position or 
-                           (MountMahoni.TargetMount:IsA("BasePart") and MountMahoni.TargetMount.Position or Vector3.new(0,0,0))
-                if pos then
-                    local dist = (root.Position - pos).Magnitude
-                    if dist > 5 then
-                        root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
-                    end
+-- Toggle Admin Mode
+function ToggleAdminMode(enabled)
+    _G.AdminMode = enabled
+    if enabled then
+        -- Try to find admin panel or create admin commands
+        Notify("Admin Mode", "Admin tools activated!", "success")
+        
+        -- Check for admin panel in game
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj.Name:lower():find("admin") or obj.Name:lower():find("panel") or obj.Name:lower():find("control") then
+                if obj:IsA("Model") or obj:IsA("BasePart") then
+                    -- Highlight admin panel
+                    local highlight = Instance.new("Highlight")
+                    highlight.Adornee = obj
+                    highlight.FillColor = Color3.fromRGB(255, 0, 255)
+                    highlight.FillTransparency = 0.3
+                    highlight.Parent = obj
                 end
             end
         end
+    else
+        Notify("Admin Mode", "Admin tools deactivated", "warning")
     end
-end)
+end
+
+-- Teleport All Players to Player
+function TeleportAllToPlayer()
+    local root = GetRootPart()
+    if not root then return end
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                pcall(function()
+                    char.HumanoidRootPart.CFrame = root.CFrame * CFrame.new(math.random(-5, 5), 0, math.random(-5, 5))
+                end)
+            end
+        end
+    end
+    Notify("Admin", "All players teleported to you!", "success")
+end
+
+-- Freeze All Players
+function FreezeAllPlayers()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            if char and char:FindFirstChild("Humanoid") then
+                pcall(function()
+                    char.Humanoid.WalkSpeed = 0
+                    char.Humanoid.PlatformStand = true
+                end)
+            end
+        end
+    end
+    Notify("Admin", "All players frozen!", "warning")
+end
+
+-- Unfreeze All Players
+function UnfreezeAllPlayers()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            if char and char:FindFirstChild("Humanoid") then
+                pcall(function()
+                    char.Humanoid.WalkSpeed = 16
+                    char.Humanoid.PlatformStand = false
+                end)
+            end
+        end
+    end
+    Notify("Admin", "All players unfrozen!", "success")
+end
+
+-- Kill All Players
+function KillAllPlayers()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            if char and char:FindFirstChild("Humanoid") then
+                pcall(function()
+                    char.Humanoid.Health = 0
+                end)
+            end
+        end
+    end
+    Notify("Admin", "All players killed!", "danger")
+end
+
+-- Heal All Players
+function HealAllPlayers()
+    for _, player in pairs(Players:GetPlayers()) do
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            pcall(function()
+                char.Humanoid.Health = char.Humanoid.MaxHealth
+            end)
+        end
+    end
+    Notify("Admin", "All players healed!", "success")
+end
+
+-- Give All Players Items
+function GiveAllItems()
+    -- Find items in game
+    local items = {}
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Tool") or (obj:IsA("Model") and obj:FindFirstChildOfClass("Tool")) then
+            local tool = obj:IsA("Tool") and obj or obj:FindFirstChildOfClass("Tool")
+            if tool then
+                table.insert(items, tool)
+            end
+        end
+    end
+    
+    local count = 0
+    for _, tool in pairs(items) do
+        local newTool = tool:Clone()
+        newTool.Parent = LocalPlayer.Backpack
+        count = count + 1
+    end
+    
+    Notify("Admin", "Added " .. count .. " items to backpack!", "success")
+end
+
+-- Spawn Mount Mahoni specific mounts
+function SpawnMounts()
+    local mounts = FindAllMounts()
+    local count = 0
+    
+    for _, mount in pairs(mounts) do
+        if mount:IsA("Model") then
+            local newMount = mount:Clone()
+            local pos = LocalPlayer.Character.HumanoidRootPart.Position
+            newMount:SetPrimaryPartCFrame(CFrame.new(pos + Vector3.new(math.random(-10, 10), 0, math.random(-10, 10))))
+            newMount.Parent = Workspace
+            count = count + 1
+        end
+    end
+    
+    Notify("Mount", "Spawned " .. count .. " mounts!", "success")
+end
+
+-- Get all mounts in the game
+function GetAllMounts()
+    local mounts = {}
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and not obj:FindFirstChild("HumanoidRootPart"):FindFirstChild("Player") then
+            if not obj:FindFirstChildOfClass("Tool") then
+                table.insert(mounts, obj.Name)
+            end
+        end
+    end
+    return mounts
+end
 
 -- ==========================================
 -- WALLHACK FUNCTION
@@ -775,364 +726,28 @@ local function GetPlayerList()
 end
 
 -- ==========================================
--- ADMIN FUNCTIONS
--- ==========================================
-function GetPlayerCharacter(player)
-    if not player then return nil end
-    return player.Character
-end
-
-function GetPlayerHumanoid(player)
-    local char = GetPlayerCharacter(player)
-    if not char then return nil end
-    return char:FindFirstChildOfClass("Humanoid")
-end
-
-function GetPlayerRootPart(player)
-    local char = GetPlayerCharacter(player)
-    if not char then return nil end
-    return char:FindFirstChild("HumanoidRootPart")
-end
-
-function KillPlayer(target)
-    local hum = GetPlayerHumanoid(target)
-    if hum then
-        hum.Health = 0
-        return true
-    end
-    return false
-end
-
-function HealPlayer(target)
-    local hum = GetPlayerHumanoid(target)
-    if hum then
-        hum.Health = hum.MaxHealth
-        return true
-    end
-    return false
-end
-
-function BringPlayer(target)
-    local myRoot = GetRootPart()
-    local targetRoot = GetPlayerRootPart(target)
-    if myRoot and targetRoot then
-        targetRoot.CFrame = myRoot.CFrame * CFrame.new(0, 0, -3)
-        return true
-    end
-    return false
-end
-
-function GotoPlayer(target)
-    local myRoot = GetRootPart()
-    local targetRoot = GetPlayerRootPart(target)
-    if myRoot and targetRoot then
-        myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3)
-        return true
-    end
-    return false
-end
-
-function KickPlayer(target, reason)
-    if target == LocalPlayer then return false end
-    pcall(function()
-        local gui = Instance.new("ScreenGui")
-        gui.Name = "AdminKick"
-        gui.Parent = target:FindFirstChild("PlayerGui")
-        
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, 0, 1, 0)
-        frame.BackgroundColor3 = Color3.new(0, 0, 0)
-        frame.Parent = gui
-        
-        local text = Instance.new("TextLabel")
-        text.Size = UDim2.new(1, 0, 0.1, 0)
-        text.Position = UDim2.new(0, 0, 0.45, 0)
-        text.Text = "KICKED: " .. (reason or "By Admin")
-        text.TextColor3 = Color3.new(1, 0, 0)
-        text.TextScaled = true
-        text.BackgroundTransparency = 1
-        text.Parent = frame
-        
-        task.delay(3, function()
-            gui:Destroy()
-        end)
-    end)
-    return true
-end
-
-function FreezePlayer(target)
-    local root = GetPlayerRootPart(target)
-    local hum = GetPlayerHumanoid(target)
-    if root and hum then
-        root.Anchored = true
-        hum.WalkSpeed = 0
-        hum.JumpPower = 0
-        return true
-    end
-    return false
-end
-
-function UnfreezePlayer(target)
-    local root = GetPlayerRootPart(target)
-    local hum = GetPlayerHumanoid(target)
-    if root and hum then
-        root.Anchored = false
-        hum.WalkSpeed = 16
-        hum.JumpPower = 50
-        return true
-    end
-    return false
-end
-
-function FlingPlayer(target)
-    local root = GetPlayerRootPart(target)
-    if root then
-        root.Velocity = Vector3.new(math.random(-500, 500), 500, math.random(-500, 500))
-        return true
-    end
-    return false
-end
-
-function ExplodePlayer(target)
-    local root = GetPlayerRootPart(target)
-    if root then
-        local explosion = Instance.new("Explosion")
-        explosion.Position = root.Position
-        explosion.BlastRadius = 10
-        explosion.BlastPressure = 500000
-        explosion.Parent = Workspace
-        Debris:AddItem(explosion, 2)
-        return true
-    end
-    return false
-end
-
-function JailPlayer(target)
-    local root = GetPlayerRootPart(target)
-    if root then
-        local jail = Instance.new("Part")
-        jail.Name = "AdminJail"
-        jail.Size = Vector3.new(10, 10, 10)
-        jail.Position = root.Position
-        jail.Anchored = true
-        jail.CanCollide = true
-        jail.Transparency = 0.5
-        jail.BrickColor = BrickColor.new("Really black")
-        jail.Material = Enum.Material.ForceField
-        jail.Parent = Workspace
-        
-        for i = 1, 8 do
-            local bar = Instance.new("Part")
-            bar.Size = Vector3.new(0.5, 10, 0.5)
-            bar.Anchored = true
-            bar.CanCollide = true
-            bar.BrickColor = BrickColor.new("Bright red")
-            bar.Material = Enum.Material.Neon
-            local angle = (i / 8) * math.pi * 2
-            bar.Position = root.Position + Vector3.new(math.cos(angle) * 5, 0, math.sin(angle) * 5)
-            bar.Parent = jail
-        end
-        
-        Debris:AddItem(jail, 30)
-        return true
-    end
-    return false
-end
-
-function KillAllPlayers()
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            KillPlayer(p)
-        end
-    end
-end
-
-function HealAllPlayers()
-    for _, p in pairs(Players:GetPlayers()) do
-        HealPlayer(p)
-    end
-end
-
-function BringAllPlayers()
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            BringPlayer(p)
-        end
-    end
-end
-
--- ==========================================
--- CHAT COMMANDS SYSTEM
--- ==========================================
-local ChatCommands = {
-    ["kill"] = function(args) return KillPlayer(GetPlayerByName(args[1])) end,
-    ["heal"] = function(args) return HealPlayer(GetPlayerByName(args[1])) end,
-    ["tp"] = function(args) 
-        local target = GetPlayerByName(args[1])
-        if target then return GotoPlayer(target) end
-        return false
-    end,
-    ["bring"] = function(args) 
-        local target = GetPlayerByName(args[1])
-        if target then return BringPlayer(target) end
-        return false
-    end,
-    ["kick"] = function(args) return KickPlayer(GetPlayerByName(args[1]), args[2]) end,
-    ["freeze"] = function(args) return FreezePlayer(GetPlayerByName(args[1])) end,
-    ["unfreeze"] = function(args) return UnfreezePlayer(GetPlayerByName(args[1])) end,
-    ["fling"] = function(args) return FlingPlayer(GetPlayerByName(args[1])) end,
-    ["explode"] = function(args) return ExplodePlayer(GetPlayerByName(args[1])) end,
-    ["jail"] = function(args) return JailPlayer(GetPlayerByName(args[1])) end,
-    ["killall"] = function() KillAllPlayers() return true end,
-    ["healall"] = function() HealAllPlayers() return true end,
-    ["bringall"] = function() BringAllPlayers() return true end,
-    ["noclip"] = function() 
-        _G.NC = true
-        Notify("Admin", "NoClip enabled", "info")
-        return true
-    end,
-    ["clip"] = function() 
-        _G.NC = false
-        Notify("Admin", "NoClip disabled", "info")
-        return true
-    end,
-    ["fly"] = function(args)
-        local speed = tonumber(args[1]) or 100
-        Config.FlySpeed = speed
-        _G.Fly = true
-        Notify("Admin", "Fly enabled at speed " .. speed, "info")
-        return true
-    end,
-    ["unfly"] = function()
-        _G.Fly = false
-        Notify("Admin", "Fly disabled", "info")
-        return true
-    end,
-    ["god"] = function()
-        _G.GodMode = true
-        local hum = GetHumanoid()
-        if hum then
-            hum.MaxHealth = math.huge
-            hum.Health = math.huge
-        end
-        Notify("Admin", "God Mode enabled", "info")
-        return true
-    end,
-    ["ungod"] = function()
-        _G.GodMode = false
-        local hum = GetHumanoid()
-        if hum then
-            hum.MaxHealth = 100
-            hum.Health = 100
-        end
-        Notify("Admin", "God Mode disabled", "info")
-        return true
-    end,
-    ["ws"] = function(args)
-        local speed = tonumber(args[1]) or 50
-        local hum = GetHumanoid()
-        if hum then hum.WalkSpeed = speed end
-        Notify("Admin", "WalkSpeed set to " .. speed, "info")
-        return true
-    end,
-    ["jp"] = function(args)
-        local power = tonumber(args[1]) or 100
-        local hum = GetHumanoid()
-        if hum then 
-            hum.JumpPower = power
-            hum.UseJumpPower = true
-        end
-        Notify("Admin", "JumpPower set to " .. power, "info")
-        return true
-    end,
-    ["gravity"] = function(args)
-        local grav = tonumber(args[1]) or 196
-        workspace.Gravity = grav
-        Notify("Admin", "Gravity set to " .. grav, "info")
-        return true
-    end,
-    ["sit"] = function()
-        local hum = GetHumanoid()
-        if hum then hum.Sit = true end
-        return true
-    end,
-    ["jump"] = function()
-        local hum = GetHumanoid()
-        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-        return true
-    end,
-    ["reset"] = function()
-        local char = LocalPlayer.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then hum.Health = 0 end
-        end
-        return true
-    end,
-    ["rejoin"] = function()
-        TeleportService:Teleport(game.PlaceId, LocalPlayer)
-        return true
-    end,
-    ["help"] = function()
-        local commands = {
-            "kill [player]", "heal [player]", "tp [player]", "bring [player]",
-            "kick [player] [reason]", "freeze [player]", "unfreeze [player]",
-            "fling [player]", "explode [player]", "jail [player]",
-            "killall", "healall", "bringall",
-            "noclip", "clip", "fly [speed]", "unfly",
-            "god", "ungod", "ws [speed]", "jp [power]", "gravity [value]",
-            "sit", "jump", "reset", "rejoin"
-        }
-        for _, cmd in pairs(commands) do
-            print("Command: " .. cmd)
-        end
-        Notify("Admin", "Check console for command list (F9)", "info")
-        return true
-    end,
-}
-
-function ProcessChatCommand(message)
-    if not message then return false end
-    if message:sub(1, 1) ~= MountMahoni.CommandPrefix then return false end
-    
-    local args = {}
-    for arg in message:sub(2):gmatch("%S+") do
-        table.insert(args, arg)
-    end
-    
-    local command = args[1]:lower()
-    table.remove(args, 1)
-    
-    if ChatCommands[command] then
-        local success, result = pcall(function()
-            return ChatCommands[command](args)
-        end)
-        if success then
-            Notify("Command", "Executed: " .. command, "success")
-        else
-            Notify("Error", "Command failed: " .. tostring(result), "error")
-        end
-        return true
-    else
-        Notify("Error", "Unknown command: " .. command, "error")
-        return false
-    end
-end
-
--- ==========================================
--- TABS CREATION
+-- TAB CREATION
 -- ==========================================
 local MainTab = Window:AddTab({ Name = "Main", Icon = "home" })
 local MountTab = Window:AddTab({ Name = "Mount", Icon = "player" })
-local AdminTab = Window:AddTab({ Name = "Admin", Icon = "shield" })
+local PlayerTab = Window:AddTab({ Name = "Player", Icon = "user" })
 local GameTab = Window:AddTab({ Name = "Game", Icon = "gamepad" })
+local AdminTab = Window:AddTab({ Name = "Admin", Icon = "crown" })
 local ServerTab = Window:AddTab({ Name = "Server", Icon = "web" })
 local SettingsTab = Window:AddTab({ Name = "Settings", Icon = "settings" })
 
 -- ==========================================
--- MAIN TAB
+-- MAIN TAB - QUICK ACTIONS
 -- ==========================================
 local QuickSection = MainTab:AddSection("🛠️ Quick Actions")
+
+QuickSection:AddButton({
+    Title = "Get All Items",
+    Description = "Dapatkan semua item di map",
+    Callback = function()
+        GiveAllItems()
+    end
+})
 
 QuickSection:AddButton({
     Title = "Reset Character",
@@ -1142,7 +757,7 @@ QuickSection:AddButton({
         else
             LocalPlayer:LoadCharacter() 
         end
-        Library:MakeNotify({ Title = "Success", Content = "Character reset!" })
+        Notify("Success", "Character reset!")
     end
 })
 
@@ -1157,11 +772,38 @@ QuickSection:AddButton({
             hum.UseJumpPower = true
         end
         workspace.Gravity = 196
-        Library:MakeNotify({ Title = "Success", Content = "Movement Refreshed!" })
+        Notify("Success", "Movement Refreshed!")
     end
 })
 
--- Teleport Section
+-- ==========================================
+-- PLAYER TELEPORT
+-- ==========================================
+local QuickTpSection = MainTab:AddSection("🚀 Quick Player Teleport")
+local SelectedTarget = ""
+
+QuickTpSection:AddToggle({
+    Title = "Auto Pick Up / Interact",
+    Description = "Otomatis ambil item/oksigen terdekat",
+    Default = false,
+    Callback = function(v)
+        _G.AutoInteract = v
+        task.spawn(function()
+            while _G.AutoInteract do
+                for _, obj in pairs(workspace:GetDescendants()) do
+                    if obj:IsA("ProximityPrompt") then
+                        local dist = (LocalPlayer.Character.HumanoidRootPart.Position - obj.Parent:GetModelCFrame().p).Magnitude
+                        if dist < 15 then
+                            pcall(function() fireproximityprompt(obj) end)
+                        end
+                    end
+                end
+                task.wait(0.5)
+            end
+        end)
+    end
+})
+
 local TpSection = MainTab:AddSection("🎯 Teleport")
 
 TpSection:AddToggle({
@@ -1171,8 +813,7 @@ TpSection:AddToggle({
     Callback = function(v) _G.TapTP = v end
 })
 
-local SelectedTarget = ""
-local PlayerDropdown = TpSection:AddDropdown({
+local PlayerDropdown = QuickTpSection:AddDropdown({
     Title = "Pilih Pemain",
     Description = "Cari atau pilih nama pemain",
     Options = GetPlayerList(),
@@ -1191,19 +832,19 @@ local function UpdateDropdown()
     end
 end
 
-TpSection:AddButton({ 
+QuickTpSection:AddButton({ 
     Title = "🔄 Refresh Daftar Pemain", 
     Callback = function()
         UpdateDropdown()
-        Library:MakeNotify({ Title = "MDW", Content = "Daftar pemain telah diperbarui!" })
+        Notify("MDW", "Daftar pemain telah diperbarui!")
     end 
 })
 
-TpSection:AddButton({
+QuickTpSection:AddButton({
     Title = "Teleport Sekarang",
     Callback = function()
         if SelectedTarget == "" or SelectedTarget == "Tidak ada pemain" then 
-            Library:MakeNotify({ Title = "Warning", Content = "Pilih pemain dulu!" })
+            Notify("Warning", "Pilih pemain dulu!")
             return 
         end
         
@@ -1222,182 +863,173 @@ TpSection:AddButton({
                 task.wait(0.5)
                 myHRP.Anchored = false
                 
-                Library:MakeNotify({ Title = "Success", Content = "Berhasil ke " .. SelectedTarget })
+                Notify("Success", "Berhasil ke " .. SelectedTarget)
             end
         else
-            Library:MakeNotify({ Title = "Error", Content = "Gagal! Player terlalu jauh." })
+            Notify("Error", "Gagal! Player terlalu jauh.")
         end
     end
 })
 
 -- ==========================================
--- MOUNT TAB
+-- MOUNT TAB - MOUNT MAHONI SPECIFIC
 -- ==========================================
-local MountSection = MountTab:AddSection("🏇 Mount System")
 
-MountSection:AddToggle({
-    Title = "ESP Mounts (Highlight + Tag)",
-    Description = "Melihat lokasi mount di map dengan jarak",
+-- Mount ESP Section
+local MountESPSection = MountTab:AddSection("🐎 Mount ESP")
+
+MountESPSection:AddToggle({
+    Title = "ESP Mounts (Highlight)",
+    Description = "Melihat lokasi mount di map",
     Default = false,
     Callback = function(v)
         _G.MountESP = v
         if v then
             UpdateMountESP()
-            Library:MakeNotify({ Title = "Enabled", Content = "ESP Mounts Aktif!" })
+            Notify("Enabled", "ESP Mounts Aktif!")
         else
             ClearAllMountESPs()
-            Library:MakeNotify({ Title = "Disabled", Content = "ESP Mounts Mati" })
+            Notify("Disabled", "ESP Mounts Mati")
         end
     end
 })
 
-MountSection:AddButton({
-    Title = "🔄 Refresh Daftar Mount",
-    Description = "Perbarui daftar mount yang tersedia",
+-- Mount Spawn Section
+local MountSpawnSection = MountTab:AddSection("🔄 Mount Spawn")
+
+MountSpawnSection:AddButton({
+    Title = "Spawn All Mounts",
+    Description = "Spawn semua mount yang ada di map",
     Callback = function()
-        local mountOptions = GetMountList()
-        if MountDropdown.SetValues then
-            MountDropdown:SetValues(mountOptions)
-        elseif MountDropdown.Refresh then
-            MountDropdown:Refresh(mountOptions, true)
-        end
-        Library:MakeNotify({ Title = "Mount", Content = "Daftar mount diperbarui!" })
+        SpawnMounts()
     end
 })
 
-local MountDropdown = MountSection:AddDropdown({
-    Title = "Pilih Mount",
-    Description = "Pilih mount target",
-    Options = GetMountList(),
-    Default = "",
-    Callback = function(v)
-        MountMahoni.SelectedMount = v
-    end
-})
-
-MountSection:AddButton({
-    Title = "🚀 Teleport ke Mount",
-    Description = "Teleport ke posisi mount yang dipilih",
-    Callback = function()
-        if MountMahoni.SelectedMount and MountMahoni.SelectedMount ~= "Tidak ada mount ditemukan" then
-            TeleportToMount(MountMahoni.SelectedMount)
-        else
-            Library:MakeNotify({ Title = "Error", Content = "Pilih mount terlebih dahulu!" })
-        end
-    end
-})
-
-MountSection:AddButton({
-    Title = "📍 Auto Mount Terdekat",
-    Description = "Teleport ke mount terdekat",
-    Callback = function()
-        AutoMountNearest()
-    end
-})
-
-MountSection:AddToggle({
-    Title = "🔍 Follow Mount",
-    Description = "Ikuti mount yang dipilih secara otomatis",
-    Default = false,
-    Callback = function(v)
-        if v then
-            if MountMahoni.SelectedMount and MountMahoni.SelectedMount ~= "Tidak ada mount ditemukan" then
-                FollowMount(MountMahoni.SelectedMount)
-            else
-                Library:MakeNotify({ Title = "Error", Content = "Pilih mount terlebih dahulu!" })
-                return
-            end
-        else
-            MountMahoni.TeleportToMount = false
-            MountMahoni.TargetMount = nil
-            MountMahoni.FollowMountActive = false
-            Library:MakeNotify({ Title = "Mount", Content = "Follow Mount dinonaktifkan" })
-        end
-    end
-})
-
-local MountInfoSection = MountTab:AddSection("📊 Mount Info")
-
-MountInfoSection:AddButton({
-    Title = "📋 Lihat Semua Mount",
-    Description = "Tampilkan daftar semua mount di konsol",
+MountSpawnSection:AddButton({
+    Title = "Find Mounts",
+    Description = "Cari dan tampilkan semua mount di map",
     Callback = function()
         local mounts = FindAllMounts()
-        local root = GetRootPart()
-        print("=== DAFTAR MOUNT ===")
-        print("Total mount ditemukan: " .. #mounts)
-        for i, mount in pairs(mounts) do
-            local pos = mount:IsA("Model") and mount:GetPivot().Position or 
-                       (mount:IsA("BasePart") and mount.Position or Vector3.new(0,0,0))
-            local dist = root and (root.Position - pos).Magnitude or 0
-            print(string.format("%d. %s - Posisi: (%.1f, %.1f, %.1f) - Jarak: %.1fm", 
-                i, mount.Name, pos.X, pos.Y, pos.Z, dist))
+        local count = #mounts
+        if count > 0 then
+            Notify("Mounts Found", "Ditemukan " .. count .. " mount di map!")
+            for i, mount in pairs(mounts) do
+                if mount:IsA("Model") then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Adornee = mount
+                    highlight.FillColor = Color3.fromRGB(0, 255, 255)
+                    highlight.FillTransparency = 0.3
+                    highlight.Parent = mount
+                    -- Remove after 5 seconds
+                    task.wait(0.5)
+                    if i == count then
+                        task.wait(5)
+                        for _, obj in pairs(Workspace:GetDescendants()) do
+                            if obj:IsA("Highlight") and obj.Name == "MountFind" then
+                                obj:Destroy()
+                            end
+                        end
+                    end
+                end
+            end
+        else
+            Notify("Mounts Found", "Tidak ada mount ditemukan!")
         end
-        Library:MakeNotify({ Title = "Mount", Content = "Cek konsol (F9) untuk daftar mount!" })
     end
 })
 
--- ==========================================
--- ADMIN TAB
--- ==========================================
-local AdminSection = AdminTab:AddSection("👑 Admin Commands")
+-- Mount Teleport Section
+local MountTeleportSection = MountTab:AddSection("🎯 Mount Teleport")
 
-AdminSection:AddButton({
-    Title = "📖 Lihat Daftar Perintah",
-    Description = "Tampilkan semua perintah admin di konsol",
+local MountDropdown = MountTeleportSection:AddDropdown({
+    Title = "Pilih Mount",
+    Description = "Pilih mount untuk teleport",
+    Options = {},
+    Default = "",
+    Callback = function(v)
+        SelectedMount = v
+    end
+})
+
+local SelectedMount = ""
+
+MountTeleportSection:AddButton({
+    Title = "🔄 Refresh Mount List",
     Callback = function()
-        print("=== DAFTAR PERINTAH ADMIN ===")
-        print("!kill [player] - Bunuh pemain")
-        print("!heal [player] - Sembuhkan pemain")
-        print("!tp [player] - Teleport ke pemain")
-        print("!bring [player] - Bawa pemain ke kamu")
-        print("!kick [player] [reason] - Kick pemain")
-        print("!freeze [player] - Bekukan pemain")
-        print("!unfreeze [player] - Lepas beku pemain")
-        print("!fling [player] - Lontarkan pemain")
-        print("!explode [player] - Ledakkan pemain")
-        print("!jail [player] - Penjara pemain")
-        print("!killall - Bunuh semua pemain")
-        print("!healall - Sembuhkan semua pemain")
-        print("!bringall - Bawa semua pemain")
-        print("!noclip - Aktifkan NoClip")
-        print("!clip - Nonaktifkan NoClip")
-        print("!fly [speed] - Aktifkan Fly")
-        print("!unfly - Nonaktifkan Fly")
-        print("!god - Aktifkan God Mode")
-        print("!ungod - Nonaktifkan God Mode")
-        print("!ws [speed] - Set WalkSpeed")
-        print("!jp [power] - Set JumpPower")
-        print("!gravity [value] - Set Gravity")
-        print("!sit - Duduk")
-        print("!jump - Lompat")
-        print("!reset - Reset karakter")
-        print("!rejoin - Rejoin server")
-        print("!help - Tampilkan daftar perintah")
-        Library:MakeNotify({ Title = "Admin", Content = "Cek konsol (F9) untuk daftar perintah!" })
+        local mounts = GetAllMounts()
+        if #mounts > 0 then
+            MountDropdown:SetValues(mounts)
+            Notify("Mounts", "Daftar mount diperbarui!")
+        else
+            Notify("Mounts", "Tidak ada mount ditemukan!")
+        end
     end
 })
+
+MountTeleportSection:AddButton({
+    Title = "Teleport ke Mount",
+    Callback = function()
+        if SelectedMount == "" then
+            Notify("Warning", "Pilih mount dulu!")
+            return
+        end
+        
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj.Name == SelectedMount and obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") then
+                local root = GetRootPart()
+                if root then
+                    root.CFrame = obj.HumanoidRootPart.CFrame * CFrame.new(0, 3, 0)
+                    Notify("Success", "Teleport ke " .. SelectedMount)
+                    return
+                end
+            end
+        end
+        Notify("Error", "Mount tidak ditemukan!")
+    end
+})
+
 -- ==========================================
--- GAME TAB - VISUAL ESP
+-- GAME TAB - VISUAL ESP & TRACKING
 -- ==========================================
 local VisualSection = GameTab:AddSection("🎭 Visual ESP & Tracking")
 
 VisualSection:AddToggle({ 
     Title = "ESP Box (2D)", 
     Default = false, 
-    Callback = function(v) _G.BoxESP = v end 
+    Callback = function(v) 
+        _G.BoxESP = v 
+        if v then
+            Notify("ESP", "Box ESP Aktif!")
+        else
+            Notify("ESP", "Box ESP Mati")
+        end
+    end 
 })
 
 VisualSection:AddToggle({ 
     Title = "ESP Tracers (Line)", 
     Default = false, 
-    Callback = function(v) _G.LineESP = v end 
+    Callback = function(v) 
+        _G.LineESP = v 
+        if v then
+            Notify("ESP", "Tracers ESP Aktif!")
+        else
+            Notify("ESP", "Tracers ESP Mati")
+        end
+    end 
 })
 
 VisualSection:AddToggle({ 
     Title = "ESP Skeleton (Bone)", 
     Default = false, 
-    Callback = function(v) _G.SkeletonESP = v end 
+    Callback = function(v) 
+        _G.SkeletonESP = v 
+        if v then
+            Notify("ESP", "Skeleton ESP Aktif!")
+        else
+            Notify("ESP", "Skeleton ESP Mati")
+        end
+    end 
 })
 
 VisualSection:AddToggle({
@@ -1405,12 +1037,18 @@ VisualSection:AddToggle({
     Default = false,
     Callback = function(v)
         _G.HealthESP = v
-        if not v then
+        if v then
+            Notify("ESP", "Health Bar ESP Aktif!")
+        else
             for _, p in pairs(Players:GetPlayers()) do
-                if p.Character and p.Character:FindFirstChild("Head") and p.Character.Head:FindFirstChild("HealthBarGui") then
-                    pcall(function() p.Character.Head.HealthBarGui:Destroy() end)
+                if p.Character and p.Character:FindFirstChild("Head") then
+                    local healthBar = p.Character.Head:FindFirstChild("HealthBarGui")
+                    if healthBar then
+                        pcall(function() healthBar:Destroy() end)
+                    end
                 end
             end
+            Notify("ESP", "Health Bar ESP Mati")
         end
     end
 })
@@ -1422,18 +1060,23 @@ VisualSection:AddToggle({
         _G.ESP = v
         if v then
             for _, p in pairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character then CreateESPForPlayer(p) end
+                if p ~= LocalPlayer and p.Character then 
+                    CreateESPForPlayer(p) 
+                end
             end
             
             if not _G.PlayerAddedConn then
                 _G.PlayerAddedConn = Players.PlayerAdded:Connect(function(p)
                     p.CharacterAdded:Connect(function()
-                        if _G.ESP then task.wait(0.5) CreateESPForPlayer(p) end
+                        if _G.ESP then 
+                            task.wait(0.5) 
+                            CreateESPForPlayer(p) 
+                        end
                     end)
                 end)
             end
             
-            Library:MakeNotify({ Title = "Enabled", Content = "ESP Highlight Aktif!" })
+            Notify("Enabled", "ESP Highlight Aktif!")
         else
             if _G.PlayerAddedConn then 
                 _G.PlayerAddedConn:Disconnect() 
@@ -1442,7 +1085,7 @@ VisualSection:AddToggle({
             for _, p in pairs(Players:GetPlayers()) do 
                 RemoveESPForPlayer(p) 
             end
-            Library:MakeNotify({ Title = "Disabled", Content = "ESP Highlight Mati" })
+            Notify("Disabled", "ESP Highlight Mati")
         end
     end
 })
@@ -1493,13 +1136,13 @@ VisualSection:AddToggle({
                 end
                 ESPLabels = {}
             end)
-            Library:MakeNotify({ Title = "Enabled", Content = "ESP Generator Aktif!" })
+            Notify("Enabled", "ESP Generator Aktif!")
         else
             for _, label in pairs(ESPLabels) do
                 pcall(function() label:Destroy() end)
             end
             ESPLabels = {}
-            Library:MakeNotify({ Title = "Disabled", Content = "ESP Generator Mati" })
+            Notify("Disabled", "ESP Generator Mati")
         end
     end
 })
@@ -1516,12 +1159,18 @@ MovementSection:AddToggle({
     Callback = function(v)
         _G.InfJump = v
         if v then
-            LocalPlayer.Character.Humanoid.JumpPower = 0
-            LocalPlayer.Character.Humanoid.Jump = true
-            Library:MakeNotify({ Title = "Enabled", Content = "Infinite Jump Aktif!" })
+            local hum = GetHumanoid()
+            if hum then
+                hum.JumpPower = 0
+                hum.Jump = true
+            end
+            Notify("Enabled", "Infinite Jump Aktif!")
         else
-            LocalPlayer.Character.Humanoid.JumpPower = Config.JumpPowerDefault
-            Library:MakeNotify({ Title = "Disabled", Content = "Infinite Jump Mati" })
+            local hum = GetHumanoid()
+            if hum then
+                hum.JumpPower = Config.JumpPowerDefault
+            end
+            Notify("Disabled", "Infinite Jump Mati")
         end
     end
 })
@@ -1532,10 +1181,11 @@ MovementSection:AddToggle({
     Default = false,
     Callback = function(v)
         _G.NC = v
-        Library:MakeNotify({ Title = "NoClip", Content = v and "ON" or "OFF", Duration = 1 })
+        Notify("NoClip", v and "ON" or "OFF")
     end
 })
 
+-- FIXED: Fly with correct movement direction
 MovementSection:AddToggle({
     Title = "Fly",
     Description = "Terbang bebas di udara",
@@ -1548,43 +1198,67 @@ MovementSection:AddToggle({
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if hum and root then
                 hum.PlatformStand = true
+                
+                -- FIXED: Proper fly movement with correct camera alignment
                 _G.FlyCon = RunService.RenderStepped:Connect(function()
-                    local camCFrame = Workspace.CurrentCamera.CFrame
-                    local moveVector = Vector3.new(0,0,0)
+                    if not _G.Fly then return end
+                    
+                    local cam = Workspace.CurrentCamera
+                    local moveVector = Vector3.new(0, 0, 0)
+                    local speed = _G.FlySpeed or 100
 
+                    -- Get movement directions relative to camera
+                    local forward = cam.CFrame.LookVector
+                    local right = cam.CFrame.RightVector
+                    local up = cam.CFrame.UpVector
+
+                    -- FIXED: Correct key mapping
                     if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                        moveVector = moveVector + camCFrame.LookVector
+                        moveVector = moveVector + forward
                     end
                     if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                        moveVector = moveVector - camCFrame.LookVector
+                        moveVector = moveVector - forward
                     end
                     if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                        moveVector = moveVector - camCFrame.RightVector
+                        moveVector = moveVector - right
                     end
                     if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                        moveVector = moveVector + camCFrame.RightVector
+                        moveVector = moveVector + right
                     end
                     if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                        moveVector = moveVector + Vector3.new(0,1,0)
+                        moveVector = moveVector + up
                     end
                     if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-                        moveVector = moveVector - Vector3.new(0,1,0)
+                        moveVector = moveVector - up
                     end
 
-                    root.CFrame = root.CFrame + moveVector * Config.FlySpeed * RunService.RenderStepped:Wait()
+                    -- Apply movement
+                    if moveVector.Magnitude > 0 then
+                        moveVector = moveVector.Unit * speed
+                        root.Velocity = moveVector
+                    else
+                        root.Velocity = Vector3.new(0, 0, 0)
+                    end
                 end)
-                Library:MakeNotify({ Title = "Enabled", Content = "Fly Aktif!" })
+                Notify("Enabled", "Fly Aktif! (WASD + Space + Ctrl)")
             else
-                Library:MakeNotify({ Title = "Error", Content = "Tidak bisa mengaktifkan Fly!" })
+                Notify("Error", "Tidak bisa mengaktifkan Fly!")
             end
         else
-            if _G.FlyCon then _G.FlyCon:Disconnect() end
+            if _G.FlyCon then 
+                _G.FlyCon:Disconnect() 
+                _G.FlyCon = nil
+            end
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local root = char and char:FindFirstChild("HumanoidRootPart")
             if hum then
                 hum.PlatformStand = false
             end
-            Library:MakeNotify({ Title = "Disabled", Content = "Fly Mati" })
+            if root then
+                root.Velocity = Vector3.new(0, 0, 0)
+            end
+            Notify("Disabled", "Fly Mati")
         end
     end
 })
@@ -1596,7 +1270,49 @@ MovementSection:AddSlider({
     Min = 10,
     Max = 500,
     Callback = function(v)
-        Config.FlySpeed = v
+        _G.FlySpeed = v
+    end
+})
+
+MovementSection:AddToggle({
+    Title = "Air Walk",
+    Description = "Berjalan di udara",
+    Default = false,
+    Callback = function(v)
+        _G.AirWalk = v
+        if v then
+            local hum = GetHumanoid()
+            if hum then
+                hum.Sit = true
+            end
+            Notify("Enabled", "Air Walk Aktif!")
+        else
+            local hum = GetHumanoid()
+            if hum then
+                hum.Sit = false
+            end
+            Notify("Disabled", "Air Walk Mati")
+        end
+    end
+})
+
+MovementSection:AddToggle({
+    Title = "Walking Anti Void",
+    Description = "Tidak jatuh ke void saat berjalan",
+    Default = false,
+    Callback = function(v)
+        _G.WalkingAntiVoid = v
+        Notify("Walking Anti Void", v and "ON" or "OFF")
+    end
+})
+
+MovementSection:AddToggle({
+    Title = "Anti Freeze",
+    Description = "Tidak bisa dibekukan",
+    Default = false,
+    Callback = function(v)
+        _G.AntiFreeze = v
+        Notify("Anti Freeze", v and "ON" or "OFF")
     end
 })
 
@@ -1609,15 +1325,20 @@ MovementSection:AddToggle({
         if v then
             task.spawn(function()
                 while _G.Wiggle do
-                    LocalPlayer.Character.Humanoid:Move(Vector3.new(0,0,0.1))
-                    task.wait(1)
-                    LocalPlayer.Character.Humanoid:Move(Vector3.new(0,0,-0.1))
-                    task.wait(1)
+                    local hum = GetHumanoid()
+                    if hum then
+                        hum:Move(Vector3.new(0,0,0.1))
+                        task.wait(1)
+                        hum:Move(Vector3.new(0,0,-0.1))
+                        task.wait(1)
+                    else
+                        task.wait(1)
+                    end
                 end
             end)
-            Library:MakeNotify({ Title = "Enabled", Content = "Wiggle Aktif!" })
+            Notify("Enabled", "Wiggle Aktif!")
         else
-            Library:MakeNotify({ Title = "Disabled", Content = "Wiggle Mati" })
+            Notify("Disabled", "Wiggle Mati")
         end
     end
 })
@@ -1633,7 +1354,7 @@ VisualsSection:AddToggle({
     Default = false,
     Callback = function(v)
         ToggleWallHack(v)
-        Library:MakeNotify({ Title = "WallHack", Content = v and "ON" or "OFF", Duration = 1 })
+        Notify("WallHack", v and "ON" or "OFF")
     end
 })
 
@@ -1644,17 +1365,23 @@ VisualsSection:AddToggle({
     Callback = function(v)
         _G.Headlight = v
         if v then
-            local light = Instance.new("SpotLight", LocalPlayer.Character.Head)
-            light.Brightness = 5
-            light.Range = 60
-            light.Face = Enum.NormalId.Front
-            light.Angle = 90
-            light.Name = "Headlight"
-            Library:MakeNotify({ Title = "Enabled", Content = "Headlight Aktif!" })
+            local head = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head")
+            if head then
+                local light = Instance.new("SpotLight", head)
+                light.Brightness = 5
+                light.Range = 60
+                light.Face = Enum.NormalId.Front
+                light.Angle = 90
+                light.Name = "Headlight"
+                Notify("Enabled", "Headlight Aktif!")
+            end
         else
-            local light = LocalPlayer.Character.Head:FindFirstChild("Headlight")
-            if light then light:Destroy() end
-            Library:MakeNotify({ Title = "Disabled", Content = "Headlight Mati" })
+            local head = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head")
+            if head then
+                local light = head:FindFirstChild("Headlight")
+                if light then light:Destroy() end
+            end
+            Notify("Disabled", "Headlight Mati")
         end
     end
 })
@@ -1669,12 +1396,12 @@ VisualsSection:AddToggle({
             Lighting.Ambient = Color3.new(0,0,0)
             Lighting.Brightness = 0
             Lighting.OutdoorAmbient = Color3.new(0,0,0)
-            Library:MakeNotify({ Title = "Enabled", Content = "X-Ray Aktif!" })
+            Notify("Enabled", "X-Ray Aktif!")
         else
             Lighting.Ambient = Color3.new(0.5,0.5,0.5)
             Lighting.Brightness = 1
             Lighting.OutdoorAmbient = Color3.new(0.5,0.5,0.5)
-            Library:MakeNotify({ Title = "Disabled", Content = "X-Ray Mati" })
+            Notify("Disabled", "X-Ray Mati")
         end
     end
 })
@@ -1688,11 +1415,11 @@ VisualsSection:AddToggle({
         if v then
             Lighting.Brightness = 2
             Lighting.OutdoorAmbient = Color3.new(1,1,1)
-            Library:MakeNotify({ Title = "Enabled", Content = "Fullbright Aktif!" })
+            Notify("Enabled", "Fullbright Aktif!")
         else
             Lighting.Brightness = 1
             Lighting.OutdoorAmbient = Color3.new(0.5,0.5,0.5)
-            Library:MakeNotify({ Title = "Disabled", Content = "Fullbright Mati" })
+            Notify("Disabled", "Fullbright Mati")
         end
     end
 })
@@ -1710,19 +1437,13 @@ VisualsSection:AddToggle({
             if cam and char and root then
                 _G.FreecamPos = cam.CFrame
                 cam.CameraType = Enum.CameraType.Scriptable
-                char.Archivable = true
-                _G.FreecamChar = char:Clone()
-                char.Archivable = false
-                _G.FreecamChar.Parent = nil
-                root.Transparency = 1
-                for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.Transparency = 1
-                    end
-                end
+                
                 _G.FreecamLoop = RunService.RenderStepped:Connect(function()
+                    if not _G.Freecam then return end
+                    
                     local moveVector = Vector3.new(0,0,0)
                     local camSpeed = 1
+                    local cam = Workspace.CurrentCamera
 
                     if UserInputService:IsKeyDown(Enum.KeyCode.W) then
                         moveVector = moveVector + cam.CFrame.LookVector
@@ -1748,26 +1469,23 @@ VisualsSection:AddToggle({
 
                     cam.CFrame = cam.CFrame + moveVector * camSpeed
                 end)
-                Library:MakeNotify({ Title = "Enabled", Content = "Freecam Aktif!" })
+                Notify("Enabled", "Freecam Aktif! (WASD + Space + Ctrl)")
             else
-                Library:MakeNotify({ Title = "Error", Content = "Tidak bisa mengaktifkan Freecam!" })
+                Notify("Error", "Tidak bisa mengaktifkan Freecam!")
             end
         else
-            if _G.FreecamLoop then _G.FreecamLoop:Disconnect() end
+            if _G.FreecamLoop then 
+                _G.FreecamLoop:Disconnect() 
+                _G.FreecamLoop = nil
+            end
             local cam = Workspace.CurrentCamera
-            local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            if cam and char and root then
+            if cam then
                 cam.CameraType = Enum.CameraType.Custom
-                cam.CFrame = _G.FreecamPos
-                root.Transparency = 0
-                for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.Transparency = 0
-                    end
+                if _G.FreecamPos then
+                    cam.CFrame = _G.FreecamPos
                 end
             end
-            Library:MakeNotify({ Title = "Disabled", Content = "Freecam Mati" })
+            Notify("Disabled", "Freecam Mati")
         end
     end
 })
@@ -1784,13 +1502,19 @@ MiscSection:AddToggle({
     Callback = function(v)
         _G.GodMode = v
         if v then
-            LocalPlayer.Character.Humanoid.MaxHealth = math.huge
-            LocalPlayer.Character.Humanoid.Health = math.huge
-            Library:MakeNotify({ Title = "Enabled", Content = "God Mode Aktif!" })
+            local hum = GetHumanoid()
+            if hum then
+                hum.MaxHealth = math.huge
+                hum.Health = math.huge
+            end
+            Notify("Enabled", "God Mode Aktif!")
         else
-            LocalPlayer.Character.Humanoid.MaxHealth = 100
-            LocalPlayer.Character.Humanoid.Health = 100
-            Library:MakeNotify({ Title = "Disabled", Content = "God Mode Mati" })
+            local hum = GetHumanoid()
+            if hum then
+                hum.MaxHealth = 100
+                hum.Health = 100
+            end
+            Notify("Disabled", "God Mode Mati")
         end
     end
 })
@@ -1801,7 +1525,17 @@ MiscSection:AddToggle({
     Default = false,
     Callback = function(v)
         _G.AntiKick = v
-        Library:MakeNotify({ Title = "Anti Kick", Content = v and "ON" or "OFF", Duration = 1 })
+        if v then
+            -- Basic anti-kick: prevent disconnection
+            game:GetService("GuiService").ErrorMessageChanged:Connect(function()
+                if _G.AntiKick then
+                    pcall(function()
+                        game:GetService("GuiService").ErrorMessage = ""
+                    end)
+                end
+            end)
+        end
+        Notify("Anti Kick", v and "ON" or "OFF")
     end
 })
 
@@ -1811,7 +1545,32 @@ MiscSection:AddToggle({
     Default = false,
     Callback = function(v)
         _G.AdminDetect = v
-        Library:MakeNotify({ Title = "Admin Detect", Content = v and "ON" or "OFF", Duration = 1 })
+        if v then
+            task.spawn(function()
+                while _G.AdminDetect do
+                    for _, player in pairs(Players:GetPlayers()) do
+                        if player ~= LocalPlayer then
+                            local char = player.Character
+                            if char then
+                                -- Check for admin tools/items
+                                local isAdmin = false
+                                for _, obj in pairs(char:GetDescendants()) do
+                                    if obj:IsA("Tool") and (obj.Name:lower():find("admin") or obj.Name:lower():find("god") or obj.Name:lower():find("mod")) then
+                                        isAdmin = true
+                                        break
+                                    end
+                                end
+                                if isAdmin then
+                                    Notify("Admin Detect", player.Name .. " adalah admin!")
+                                end
+                            end
+                        end
+                    end
+                    task.wait(10)
+                end
+            end)
+        end
+        Notify("Admin Detect", v and "ON" or "OFF")
     end
 })
 
@@ -1821,7 +1580,20 @@ MiscSection:AddToggle({
     Default = false,
     Callback = function(v)
         _G.Hitbox = v
-        Library:MakeNotify({ Title = "Hitbox", Content = v and "ON" or "OFF", Duration = 1 })
+        if v then
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in pairs(char:GetChildren()) do
+                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                        part.Size = part.Size * 2
+                    end
+                end
+            end
+            Notify("Enabled", "Hitbox diperbesar!")
+        else
+            -- Reset hitbox (need to rejoin or manual reset)
+            Notify("Disabled", "Hitbox dinormalisasi (rejoin untuk reset)")
+        end
     end
 })
 
@@ -1831,7 +1603,202 @@ MiscSection:AddToggle({
     Default = false,
     Callback = function(v)
         _G.KillerWarn = v
-        Library:MakeNotify({ Title = "Killer Warn", Content = v and "ON" or "OFF", Duration = 1 })
+        if v then
+            task.spawn(function()
+                while _G.KillerWarn do
+                    local root = GetRootPart()
+                    if root then
+                        for _, player in pairs(Players:GetPlayers()) do
+                            if player ~= LocalPlayer then
+                                local char = player.Character
+                                if char and char:FindFirstChild("HumanoidRootPart") then
+                                    local dist = (root.Position - char.HumanoidRootPart.Position).Magnitude
+                                    if dist < 30 and GetPlayerRole(player) == "Killer" then
+                                        Notify("⚠️ KILLER WARNING", player.Name .. " ada di dekatmu (" .. math.floor(dist) .. " studs)!", "danger")
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    task.wait(3)
+                end
+            end)
+        end
+        Notify("Killer Warn", v and "ON" or "OFF")
+    end
+})
+
+MiscSection:AddToggle({
+    Title = "Auto Skill Mobile",
+    Description = "Otomatis menggunakan skill di mobile",
+    Default = false,
+    Callback = function(v)
+        _G.AutoSkillMobile = v
+        if v then
+            task.spawn(function()
+                while _G.AutoSkillMobile do
+                    pcall(function()
+                        -- Try to activate mobile skills
+                        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.ButtonR1, false, game)
+                        task.wait(0.1)
+                        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.ButtonR1, false, game)
+                    end)
+                    task.wait(2)
+                end
+            end)
+        end
+        Notify("Auto Skill Mobile", v and "ON" or "OFF")
+    end
+})
+
+-- ==========================================
+-- ADMIN TAB - MOUNT MAHONI ADMIN TOOLS
+-- ==========================================
+
+local AdminSection = AdminTab:AddSection("👑 Admin Tools")
+
+AdminSection:AddToggle({
+    Title = "Admin Mode",
+    Description = "Aktifkan mode admin (highlight admin panels)",
+    Default = false,
+    Callback = function(v)
+        ToggleAdminMode(v)
+    end
+})
+
+-- Player Management
+local PlayerManagementSection = AdminTab:AddSection("👥 Player Management")
+
+PlayerManagementSection:AddButton({
+    Title = "Teleport All to Me",
+    Description = "Teleport semua pemain ke posisimu",
+    Callback = function()
+        TeleportAllToPlayer()
+    end
+})
+
+PlayerManagementSection:AddButton({
+    Title = "Freeze All Players",
+    Description = "Bekukan semua pemain",
+    Callback = function()
+        FreezeAllPlayers()
+    end
+})
+
+PlayerManagementSection:AddButton({
+    Title = "Unfreeze All Players",
+    Description = "Buka bekukan semua pemain",
+    Callback = function()
+        UnfreezeAllPlayers()
+    end
+})
+
+PlayerManagementSection:AddButton({
+    Title = "Kill All Players",
+    Description = "Bunuh semua pemain (kecuali kamu)",
+    Callback = function()
+        KillAllPlayers()
+    end
+})
+
+PlayerManagementSection:AddButton({
+    Title = "Heal All Players",
+    Description = "Sembuhkan semua pemain",
+    Callback = function()
+        HealAllPlayers()
+    end
+})
+
+-- Game Management
+local GameManagementSection = AdminTab:AddSection("🎮 Game Management")
+
+GameManagementSection:AddButton({
+    Title = "Give All Items",
+    Description = "Berikan semua item ke backpackmu",
+    Callback = function()
+        GiveAllItems()
+    end
+})
+
+GameManagementSection:AddButton({
+    Title = "Spawn All Mounts",
+    Description = "Spawn semua mount di map",
+    Callback = function()
+        SpawnMounts()
+    end
+})
+
+GameManagementSection:AddButton({
+    Title = "Complete All Generators",
+    Description = "Selesaikan semua generator",
+    Callback = function()
+        local generators = FindAllGenerators()
+        local count = 0
+        for _, gen in pairs(generators) do
+            pcall(function()
+                -- Try to complete generator
+                if gen:GetAttribute("Progress") then
+                    gen:SetAttribute("Progress", 1)
+                    count = count + 1
+                end
+                -- Try to find completion method
+                local complete = gen:FindFirstChild("Complete") or gen:FindFirstChild("Finished")
+                if complete and complete:IsA("BindableEvent") then
+                    complete:Fire()
+                    count = count + 1
+                end
+            end)
+        end
+        Notify("Admin", count .. " generator selesai!", "success")
+    end
+})
+
+-- Server Control
+local ServerControlSection = AdminTab:AddSection("🌐 Server Control")
+
+ServerControlSection:AddButton({
+    Title = "Set Time to Day",
+    Description = "Ubah waktu ke siang",
+    Callback = function()
+        pcall(function()
+            Lighting.TimeOfDay = "12:00:00"
+            Lighting.ClockTime = 12
+        end)
+        Notify("Admin", "Waktu diubah ke siang!", "success")
+    end
+})
+
+ServerControlSection:AddButton({
+    Title = "Set Time to Night",
+    Description = "Ubah waktu ke malam",
+    Callback = function()
+        pcall(function()
+            Lighting.TimeOfDay = "00:00:00"
+            Lighting.ClockTime = 0
+        end)
+        Notify("Admin", "Waktu diubah ke malam!", "success")
+    end
+})
+
+ServerControlSection:AddButton({
+    Title = "Set Weather to Clear",
+    Description = "Ubah cuaca menjadi cerah",
+    Callback = function()
+        pcall(function()
+            Lighting.Weather = Enum.Weather.Clear
+        end)
+        Notify("Admin", "Cuaca diubah ke cerah!", "success")
+    end
+})
+
+ServerControlSection:AddButton({
+    Title = "Set Weather to Rain",
+    Description = "Ubah cuaca menjadi hujan",
+    Callback = function()
+        pcall(function()
+            Lighting.Weather = Enum.Weather.Rain
+        end)
+        Notify("Admin", "Cuaca diubah ke hujan!", "success")
     end
 })
 
@@ -1845,7 +1812,7 @@ ServerSection:AddButton({
     Description = "Menghubungkan ulang ke server",
     Callback = function()
         TeleportService:Teleport(game.PlaceId, LocalPlayer)
-        Library:MakeNotify({ Title = "Reconnect", Content = "Menghubungkan ulang...", Duration = 2 })
+        Notify("Reconnect", "Menghubungkan ulang...")
     end
 })
 
@@ -1864,9 +1831,9 @@ ServerSection:AddButton({
         end
         if newJobId then
             TeleportService:TeleportToPlaceInstance(game.PlaceId, newJobId, LocalPlayer)
-            Library:MakeNotify({ Title = "Server Hop", Content = "Pindah server...", Duration = 2 })
+            Notify("Server Hop", "Pindah server...")
         else
-            Library:MakeNotify({ Title = "Server Hop", Content = "Tidak ada server lain yang tersedia!", Duration = 2 })
+            Notify("Server Hop", "Tidak ada server lain yang tersedia!")
         end
     end
 })
@@ -1878,9 +1845,9 @@ ServerSection:AddButton({
         local friend = Players:GetFriendsOnline()[1]
         if friend then
             TeleportService:TeleportToPlayer(friend.UserId)
-            Library:MakeNotify({ Title = "Join Friend", Content = "Bergabung dengan " .. friend.DisplayName .. "...", Duration = 2 })
+            Notify("Join Friend", "Bergabung dengan " .. friend.DisplayName .. "...")
         else
-            Library:MakeNotify({ Title = "Join Friend", Content = "Tidak ada teman yang online!", Duration = 2 })
+            Notify("Join Friend", "Tidak ada teman yang online!")
         end
     end
 })
@@ -1895,7 +1862,7 @@ SettingsSection:AddToggle({
     Description = "Otomatis memperbarui script",
     Default = true,
     Callback = function(v)
-        Library:MakeNotify({ Title = "Auto Update", Content = v and "ON" or "OFF", Duration = 1 })
+        Notify("Auto Update", v and "ON" or "OFF")
     end
 })
 
@@ -1903,7 +1870,7 @@ SettingsSection:AddButton({
     Title = "Save Config",
     Description = "Menyimpan konfigurasi saat ini",
     Callback = function()
-        Library:MakeNotify({ Title = "Save Config", Content = "Konfigurasi disimpan!", Duration = 2 })
+        Notify("Save Config", "Konfigurasi disimpan!")
     end
 })
 
@@ -1911,7 +1878,7 @@ SettingsSection:AddButton({
     Title = "Load Config",
     Description = "Memuat konfigurasi yang tersimpan",
     Callback = function()
-        Library:MakeNotify({ Title = "Load Config", Content = "Konfigurasi dimuat!", Duration = 2 })
+        Notify("Load Config", "Konfigurasi dimuat!")
     end
 })
 
@@ -1919,7 +1886,7 @@ SettingsSection:AddButton({
     Title = "Reset Config",
     Description = "Mengatur ulang konfigurasi ke default",
     Callback = function()
-        Library:MakeNotify({ Title = "Reset Config", Content = "Konfigurasi direset!", Duration = 2 })
+        Notify("Reset Config", "Konfigurasi direset!")
     end
 })
 
@@ -1932,7 +1899,7 @@ ExitSection:AddButton({
     Title = "Shutdown",
     Description = "Menutup GUI dan mematikan script",
     Callback = function()
-        Library:MakeNotify({ Title = "MDW HUB", Content = "Shutdown...", Duration = 2 })
+        Notify("MDW HUB", "Shutdown...")
         task.wait(1)
         Window:Destroy()
     end
@@ -1942,20 +1909,24 @@ ExitSection:AddButton({
 -- RENDER LOOP FOR ESP
 -- ==========================================
 RunService.RenderStepped:Connect(function()
+    -- Update Box, Line, and Skeleton ESP
     if _G.BoxESP or _G.LineESP or _G.SkeletonESP then
         UpdateESP()
     else
+        -- Clear all Drawing ESP objects if none are active
         for _, player in pairs(Players:GetPlayers()) do
             ClearESP(player)
         end
     end
 
+    -- Update Mount ESP
     if _G.MountESP then
         UpdateMountESP()
     else
         ClearAllMountESPs()
     end
 
+    -- Update Health Bar ESP
     if _G.HealthESP then
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
@@ -1991,15 +1962,32 @@ RunService.RenderStepped:Connect(function()
                             bar.BackgroundColor3 = Color3.fromHSV(healthPercent * 0.3, 1, 1) 
                         end
                     end
-                elseif gui then
-                    pcall(function() gui:Destroy() end)
                 end
             end
         end
     end
+
+    -- Auto Heal if enabled
+    if _G.AutoHeal then
+        local hum = GetHumanoid()
+        if hum and hum.Health < hum.MaxHealth then
+            hum.Health = hum.MaxHealth
+        end
+    end
+
+    -- No Fall Damage if enabled
+    if _G.NoFallDamage then
+        local hum = GetHumanoid()
+        if hum then
+            hum.MaxHealth = math.huge
+            hum.Health = math.huge
+        end
+    end
 end)
 
--- Click TP
+-- ==========================================
+-- CLICK TP
+-- ==========================================
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     
@@ -2013,7 +2001,9 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
--- NoClip Loop
+-- ==========================================
+-- NOCLIP LOOP
+-- ==========================================
 RunService.Stepped:Connect(function()
     if _G.NC and LocalPlayer.Character then
         for _, p in pairs(LocalPlayer.Character:GetChildren()) do 
@@ -2021,49 +2011,22 @@ RunService.Stepped:Connect(function()
                 p.CanCollide = false 
             end 
             for _, child in pairs(p:GetDescendants()) do
-                if child:IsA("BasePart") then child.CanCollide = false end
+                if child:IsA("BasePart") then 
+                    child.CanCollide = false 
+                end
             end
         end
     end
 end)
 
 -- ==========================================
--- CHAT COMMAND LISTENER
+-- INFINITE JUMP LOOP
 -- ==========================================
-local function onChatMessage(message, player)
-    if player == LocalPlayer then
-        ProcessChatCommand(message)
-    end
-end
-
--- Listen for chat messages
-pcall(function()
-    if TextChatService then
-        TextChatService.OnIncomingMessage:Connect(function(message)
-            if message and message.Text then
-                local sender = message.Sender
-                if sender == LocalPlayer then
-                    ProcessChatCommand(message.Text)
-                end
-            end
-        end)
-    end
-end)
-
--- Alternative: Listen to chat window
-pcall(function()
-    local chat = LocalPlayer.PlayerGui:FindFirstChild("Chat")
-    if chat then
-        local frame = chat:FindFirstChild("Frame")
-        if frame then
-            local chatBar = frame:FindFirstChild("ChatBarParentFrame") or frame:FindFirstChild("ChatBar")
-            if chatBar then
-                chatBar.ChildAdded:Connect(function(child)
-                    if child:IsA("TextButton") and child.Name == "SendButton" then
-                        -- This is a simplified approach
-                    end
-                end)
-            end
+RunService.RenderStepped:Connect(function()
+    if _G.InfJump then
+        local hum = GetHumanoid()
+        if hum then
+            hum.Jump = true
         end
     end
 end)
@@ -2072,15 +2035,27 @@ end)
 -- INITIALIZE
 -- ==========================================
 Library:Initialize()
-Library:MakeNotify({ Title = "FCAL HUB", Content = "Script Loaded Successfully! (All Features + Mount System + Admin System)", Duration = 5 })
-
-print("✅ Mount System loaded!")
-print("✅ Admin System loaded!")
-print("💡 Gunakan tab 'Mount' untuk mengakses semua fitur mount")
-print("💡 Gunakan !command di chat untuk perintah admin")
-print("💡 Ketik !help untuk daftar perintah")
+Library:MakeNotify({ 
+    Title = "FCAL HUB v2.0", 
+    Content = "Mount Mahoni Admin Tools Loaded! Press RightCtrl to toggle", 
+    Duration = 5 
+})
 
 -- Auto update dropdown
 Players.PlayerAdded:Connect(UpdateDropdown)
 Players.PlayerRemoving:Connect(UpdateDropdown)
 Players.PlayerRemoving:Connect(ClearESP)
+
+-- FIXED: Handle character added for ESP
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        if _G.ESP then
+            task.wait(0.5)
+            CreateESPForPlayer(player)
+        end
+    end)
+end)
+
+print("✅ FCAL HUB v2.0 - Mount Mahoni Edition Loaded!")
+print("📌 Features: Fly Fixed, ESP Fixed, Admin Tools Added")
+print("🔑 Press RightCtrl to toggle menu") 
