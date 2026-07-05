@@ -1,8 +1,9 @@
 --[[
     FCAL HUB - MOUNT MAHONI EDITION (FIXED & IMPROVED)
-    Version: 1.1.1 | FULL FEATURES + MOUNT MAHONI ADMIN SPECIAL
+    Version: 1.1.2 | FULL FEATURES + MOUNT MAHONI ADMIN SPECIAL
     FIXED: Fly Controls (Inverted fixed), ESP (Active & Fixed), Inf Jump, God Mode
     ADDED: Mount Mahoni Tab (Auto Summit, Pos Teleports, Admin Tools)
+    ADDED: Sultan Admin Features (Change Character, Noobify, Rocket, Ramp)
 --]]
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/mdwpanel/Roblox/refs/heads/main/main_ui_modern.lua"))()
@@ -162,7 +163,7 @@ function RemoveHighlight(player)
         pcall(function() ESP_Highlights[player]:Destroy() end)
         ESP_Highlights[player] = nil
     end
-end
+}
 
 -- Mount Mahoni Helpers
 function GetCheckpoints()
@@ -192,7 +193,7 @@ end
 -- ==========================================
 local Window = Library:Window({
     Title = "FCAL HUB - MOUNT MAHONI",
-    Footer = "v1.1.1 | Fixed & Improved"
+    Footer = "v1.1.2 | Fixed & Improved"
 })
 
 local MainTab = Window:AddTab({ Name = "Main", Icon = "home" })
@@ -204,7 +205,7 @@ local SettingsTab = Window:AddTab({ Name = "Settings", Icon = "settings" })
 -- ==========================================
 -- MOUNT MAHONI TAB
 -- ==========================================
-local MountSection = MountTab:AddSection("🏔️ Mount Mahoni Features")
+local MountSection = MountTab:AddSection(" Mount Mahoni Features")
 
 MountSection:AddToggle({
     Title = "Auto Summit (Win)",
@@ -249,13 +250,12 @@ MountSection:AddButton({
 })
 
 -- ADMIN TOOLS SECTION
-local AdminSection = MountTab:AddSection("👑 Admin Features")
+local AdminSection = MountTab:AddSection(" Admin Features")
 
 AdminSection:AddButton({
     Title = "Get Admin Tools (Tools)",
     Description = "Dapatkan item admin (Broom, Hammer, etc.)",
     Callback = function()
-        -- Mencari tools di ServerStorage/ReplicatedStorage yang biasanya untuk admin
         local found = 0
         local adminToolsNames = {"Admin", "Broom", "Hammer", "Sword", "Gravity", "Btools", "F3X"}
         
@@ -274,7 +274,6 @@ AdminSection:AddButton({
         if found > 0 then
             Notify("Admin Tools", "Berhasil mengambil " .. found .. " item admin!")
         else
-            -- Manual create basic BTools if not found
             local tool = Instance.new("HopperBin")
             tool.BinType = Enum.HopperBinItemType.Grab
             tool.Parent = LocalPlayer.Backpack
@@ -295,7 +294,6 @@ AdminSection:AddToggle({
                         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Humanoid") then
                             local dist = (GetRootPart().Position - p.Character.HumanoidRootPart.Position).Magnitude
                             if dist < 15 then
-                                -- Mencari tool untuk menyerang
                                 local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool") or LocalPlayer.Backpack:FindFirstChildOfClass("Tool")
                                 if tool then
                                     tool.Parent = LocalPlayer.Character
@@ -326,7 +324,70 @@ AdminSection:AddButton({
     end
 })
 
-local PosSection = MountTab:AddSection("📍 Teleport to Pos")
+-- Sultan Admin Features (Based on image)
+local SultanAdminSection = MountTab:AddSection(" Sultan Admin Features")
+
+SultanAdminSection:AddButton({
+    Title = "Ganti Karakter Pemain (Bundel)",
+    Description = "Mengganti karakter pemain menjadi bundel tertentu. (Membutuhkan RemoteEvent)",
+    Callback = function()
+        -- Asumsi ada RemoteEvent untuk mengganti karakter
+        local remoteEvent = ReplicatedStorage:FindFirstChild("ChangeCharacterEvent") -- Ganti dengan nama RemoteEvent yang benar
+        if remoteEvent then
+            remoteEvent:FireServer("Bundel") -- Asumsi parameter "Bundel" untuk jenis karakter
+            Notify("Sultan Admin", "Mencoba mengganti karakter menjadi Bundel.")
+        else
+            Notify("Sultan Admin", "RemoteEvent 'ChangeCharacterEvent' tidak ditemukan. Fitur mungkin tidak berfungsi.")
+        end
+    end
+})
+
+SultanAdminSection:AddButton({
+    Title = "Noobify",
+    Description = "Mengubah pemain menjadi 'noob'. (Membutuhkan RemoteEvent)",
+    Callback = function()
+        -- Asumsi ada RemoteEvent untuk noobify
+        local remoteEvent = ReplicatedStorage:FindFirstChild("NoobifyEvent") -- Ganti dengan nama RemoteEvent yang benar
+        if remoteEvent then
+            remoteEvent:FireServer(LocalPlayer) -- Asumsi targetnya adalah LocalPlayer
+            Notify("Sultan Admin", "Mencoba mengaktifkan Noobify.")
+        else
+            Notify("Sultan Admin", "RemoteEvent 'NoobifyEvent' tidak ditemukan. Fitur mungkin tidak berfungsi.")
+        end
+    end
+})
+
+SultanAdminSection:AddButton({
+    Title = "Roket",
+    Description = "Meluncurkan roket. (Membutuhkan RemoteEvent)",
+    Callback = function()
+        -- Asumsi ada RemoteEvent untuk meluncurkan roket
+        local remoteEvent = ReplicatedStorage:FindFirstChild("LaunchRocketEvent") -- Ganti dengan nama RemoteEvent yang benar
+        if remoteEvent then
+            remoteEvent:FireServer() 
+            Notify("Sultan Admin", "Mencoba meluncurkan roket.")
+        else
+            Notify("Sultan Admin", "RemoteEvent 'LaunchRocketEvent' tidak ditemukan. Fitur mungkin tidak berfungsi.")
+        end
+    end
+})
+
+SultanAdminSection:AddButton({
+    Title = "Ramping",
+    Description = "Membuat jalan miring/ramping. (Membutuhkan RemoteEvent)",
+    Callback = function()
+        -- Asumsi ada RemoteEvent untuk membuat ramping
+        local remoteEvent = ReplicatedStorage:FindFirstChild("CreateRampEvent") -- Ganti dengan nama RemoteEvent yang benar
+        if remoteEvent then
+            remoteEvent:FireServer(LocalPlayer.Character.HumanoidRootPart.Position) -- Asumsi membuat ramp di posisi pemain
+            Notify("Sultan Admin", "Mencoba membuat ramping.")
+        else
+            Notify("Sultan Admin", "RemoteEvent 'CreateRampEvent' tidak ditemukan. Fitur mungkin tidak berfungsi.")
+        end
+    end
+})
+
+local PosSection = MountTab:AddSection(" Teleport to Pos")
 local cps = GetCheckpoints()
 if #cps > 0 then
     for i, pos in pairs(cps) do
@@ -347,7 +408,7 @@ end
 -- ==========================================
 -- PLAYER TAB
 -- ==========================================
-local MovementSection = PlayerTab:AddSection("🏃 Movement")
+local MovementSection = PlayerTab:AddSection(" Movement")
 
 MovementSection:AddToggle({
     Title = "Fly",
@@ -433,7 +494,7 @@ MovementSection:AddToggle({
 -- ==========================================
 -- VISUALS TAB
 -- ==========================================
-local EspSection = VisualTab:AddSection("👤 Player ESP")
+local EspSection = VisualTab:AddSection(" Player ESP")
 
 EspSection:AddToggle({
     Title = "Highlight ESP",
