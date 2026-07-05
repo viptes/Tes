@@ -1342,9 +1342,6 @@ MountInfoSection:AddButton({
 -- ==========================================
 local AdminSection = AdminTab:AddSection("👑 Admin Commands")
 
-AdminSection:AddLabel("Gunakan ! diikuti perintah di chat")
-AdminSection:AddLabel("Contoh: !kill playername")
-
 AdminSection:AddButton({
     Title = "📖 Lihat Daftar Perintah",
     Description = "Tampilkan semua perintah admin di konsol",
@@ -1380,10 +1377,6 @@ AdminSection:AddButton({
         Library:MakeNotify({ Title = "Admin", Content = "Cek konsol (F9) untuk daftar perintah!" })
     end
 })
-
-AdminSection:AddLabel("")
-AdminSection:AddLabel("💡 Chat Command System Aktif!")
-
 -- ==========================================
 -- GAME TAB - VISUAL ESP
 -- ==========================================
