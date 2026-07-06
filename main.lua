@@ -3148,15 +3148,15 @@ local function StartFly()
             local moveVec = Vector3.new(0,0,0)
             
             -- Memperbaiki arah yang terbalik sesuai laporan pengguna (Dibalik)
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVec = moveVec - cam.CFrame.LookVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVec = moveVec + cam.CFrame.LookVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVec = moveVec + cam.CFrame.RightVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVec = moveVec - cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVec = moveVec + cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVec = moveVec - cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVec = moveVec - cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVec = moveVec + cam.CFrame.RightVector end
             
             if moveVec.Magnitude == 0 and hum.MoveDirection.Magnitude > 0 then
                 local joyDir = hum.MoveDirection
                 -- Memperbaiki arah joystick yang terbalik (Dibalik)
-                moveVec = (cam.CFrame.LookVector * joyDir.Z) + (cam.CFrame.RightVector * -joyDir.X)
+                moveVec = (cam.CFrame.LookVector * joyDir.Z) + (cam.CFrame.RightVector * joyDir.X)
             end
             
             local yVel = 0
@@ -4397,7 +4397,7 @@ ExitSection:AddButton({
 -- RENDER LOOP FOR ESP
 -- ==========================================
 RunService.RenderStepped:Connect(function()
-    if not (_G.BoxESP or _G.LineESP or _G.SkeletonESP) then
+    if not (_G.BoxESP or _G.LineESP or _G.SkeletonESP or _G.ESP) then
         for _, obj in pairs(ESP_Objects) do 
             pcall(function()
                 if obj.Box then obj.Box.Visible = false end
@@ -4409,74 +4409,23 @@ RunService.RenderStepped:Connect(function()
                 end
             end)
         end
-        -- Kami tidak menghentikan loop di sini jika _G.ESP (Highlight) aktif karena Highlight di-handle secara terpisah oleh CreateESPForPlayer, 
-        -- tapi jika tidak ada ESP visual berbasis Drawing yang aktif, kita bisa return untuk menghemat performa.
         return
     end
 
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local rootPart = player.Character.HumanoidRootPart
-            local pos, onScreen = Workspace.CurrentCamera:WorldToViewportPoint(rootPart.Position)
-            
-            if onScreen then
-                if not ESP_Objects[player] then
-                    ESP_Objects[player] = { 
-                        Box = Drawing.new("Square"), 
-                        Line = Drawing.new("Line"),
-                        Skeleton = {}
-                    }
-                end
-                
-                local obj = ESP_Objects[player]
-                local color = GetESPColor(player)
-                
-                if _G.BoxESP then
-                    local sizeX = math.clamp(2000 / pos.Z, 10, 500)
-                    local sizeY = math.clamp(3000 / pos.Z, 10, 700)
-                    
-                    obj.Box.Visible = true
-                    obj.Box.Color = color
-                    obj.Box.Size = Vector2.new(sizeX, sizeY)
-                    obj.Box.Position = Vector2.new(pos.X - sizeX / 2, pos.Y - sizeY / 2)
-                    obj.Box.Thickness = 1
-                    obj.Box.Filled = false
-                else
-                    obj.Box.Visible = false
-                end
-                
-                if _G.LineESP then
-                    obj.Line.Visible = true
-                    obj.Line.Color = color
-                    obj.Line.From = Vector2.new(Workspace.CurrentCamera.ViewportSize.X / 2, Workspace.CurrentCamera.ViewportSize.Y)
-                    obj.Line.To = Vector2.new(pos.X, pos.Y)
-                    obj.Line.Thickness = 1
-                else
-                    obj.Line.Visible = false
-                end
-                
-                if _G.SkeletonESP then
-                    UpdateSkeletonESP(player, obj)
-                else
-                    for _, line in pairs(obj.Skeleton) do
-                        line.Visible = false
-                    end
-                end
-            else
-                if ESP_Objects[player] then 
-                    if ESP_Objects[player].Box then ESP_Objects[player].Box.Visible = false end
-                    if ESP_Objects[player].Line then ESP_Objects[player].Line.Visible = false end
-                    if ESP_Objects[player].Skeleton then
-                        for _, line in pairs(ESP_Objects[player].Skeleton) do
-                            line.Visible = false
-                        end
-                    end
-                end
+    -- Update Highlight ESP
+    if _G.ESP then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then
+                CreateESPForPlayer(p)
             end
-        else
-            ClearESP(player)
         end
-    end 
+    else
+        for p, hl in pairs(ESP_Highlights) do
+            RemoveESPForPlayer(p)
+        end
+    end
+
+    UpdateESP()
 end)
 
 -- Click TP
