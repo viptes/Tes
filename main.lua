@@ -269,18 +269,25 @@ local Window = Library:Window({
 -- ==========================================
 function ClearESP(player)
     if ESP_Objects[player] then
-        for _, obj in pairs(ESP_Objects[player]) do
-            pcall(function() 
-                if obj.Box then obj.Box.Visible = false end
-                if obj.Line then obj.Line.Visible = false end
-                if obj.Skeleton then 
-                    for _, line in pairs(obj.Skeleton) do
-                        line.Visible = false
-                    end
+        local objects = ESP_Objects[player]
+        pcall(function()
+            if objects.Box then objects.Box:Remove() end
+            if objects.Line then objects.Line:Remove() end
+            if objects.HealthBar then objects.HealthBar:Remove() end
+            if objects.HealthBarOutline then objects.HealthBarOutline:Remove() end
+            if objects.Distance then objects.Distance:Remove() end
+            if objects.Name then objects.Name:Remove() end
+            if objects.Skeleton then
+                for _, line in pairs(objects.Skeleton) do
+                    line:Remove()
                 end
-                obj:Remove() 
-            end)
-        end
+            end
+            if objects.Corners then
+                for _, line in pairs(objects.Corners) do
+                    line:Remove()
+                end
+            end
+        end)
         ESP_Objects[player] = nil
     end
 end
@@ -305,64 +312,141 @@ function UpdateESP()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             local character = player.Character
-            if character and character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("Humanoid") then
-                local rootPart = character.HumanoidRootPart
-                local pos, onScreen = Workspace.CurrentCamera:WorldToViewportPoint(rootPart.Position)
+            local hum = character and character:FindFirstChildOfClass("Humanoid")
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            
+            if character and hum and root then
+                local pos, onScreen = Workspace.CurrentCamera:WorldToViewportPoint(root.Position)
                 
+                -- Highlight ESP
+                if _G.ESP then CreateESPForPlayer(player) else RemoveESPForPlayer(player) end
+
                 if onScreen then
                     if not ESP_Objects[player] then
                         ESP_Objects[player] = {
                             Box = Drawing.new("Square"),
                             Line = Drawing.new("Line"),
-                            Skeleton = {}
+                            HealthBar = Drawing.new("Line"),
+                            HealthBarOutline = Drawing.new("Line"),
+                            Distance = Drawing.new("Text"),
+                            Name = Drawing.new("Text"),
+                            Skeleton = {},
+                            Corners = {}
                         }
+                        -- Initialize 8 lines for corners
+                        for i = 1, 8 do
+                            ESP_Objects[player].Corners[i] = Drawing.new("Line")
+                        end
                     end
 
-                    local color = GetESPColor(player)
                     local objects = ESP_Objects[player]
+                    local color = GetESPColor(player)
+                    local head = character:FindFirstChild("Head")
+                    local headPos = head and Workspace.CurrentCamera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                    local legPos = Workspace.CurrentCamera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
+                    
+                    local height = math.abs(headPos.Y - legPos.Y)
+                    local width = height / 2
+                    local xPos = headPos.X - width / 2
+                    local yPos = headPos.Y
 
+                    -- Corner Box ESP (Gaya PUBG)
                     if _G.BoxESP then
-                        local sizeX = 2000 / pos.Z
-                        local sizeY = 3000 / pos.Z
+                        local lineLen = width / 4
+                        local corners = objects.Corners
+                        for _, line in pairs(corners) do line.Visible = true line.Color = color line.Thickness = 1.5 end
                         
-                        objects.Box.Visible = true
-                        objects.Box.Color = color
-                        objects.Box.Thickness = 1
-                        objects.Box.Filled = false
-                        objects.Box.Size = Vector2.new(sizeX, sizeY)
-                        objects.Box.Position = Vector2.new(pos.X - sizeX / 2, pos.Y - sizeY / 2)
+                        -- Top Left
+                        corners[1].From = Vector2.new(xPos, yPos)
+                        corners[1].To = Vector2.new(xPos + lineLen, yPos)
+                        corners[2].From = Vector2.new(xPos, yPos)
+                        corners[2].To = Vector2.new(xPos, yPos + lineLen)
+                        -- Top Right
+                        corners[3].From = Vector2.new(xPos + width, yPos)
+                        corners[3].To = Vector2.new(xPos + width - lineLen, yPos)
+                        corners[4].From = Vector2.new(xPos + width, yPos)
+                        corners[4].To = Vector2.new(xPos + width, yPos + lineLen)
+                        -- Bottom Left
+                        corners[5].From = Vector2.new(xPos, yPos + height)
+                        corners[5].To = Vector2.new(xPos + lineLen, yPos + height)
+                        corners[6].From = Vector2.new(xPos, yPos + height)
+                        corners[6].To = Vector2.new(xPos, yPos + height - lineLen)
+                        -- Bottom Right
+                        corners[7].From = Vector2.new(xPos + width, yPos + height)
+                        corners[7].To = Vector2.new(xPos + width - lineLen, yPos + height)
+                        corners[8].From = Vector2.new(xPos + width, yPos + height)
+                        corners[8].To = Vector2.new(xPos + width, yPos + height - lineLen)
                     else
-                        objects.Box.Visible = false
+                        for _, line in pairs(objects.Corners) do line.Visible = false end
                     end
 
+                    -- Line ESP (Dari Atas Tengah)
                     if _G.LineESP then
                         objects.Line.Visible = true
+                        objects.Line.From = Vector2.new(Workspace.CurrentCamera.ViewportSize.X / 2, 0)
+                        objects.Line.To = Vector2.new(headPos.X, headPos.Y)
                         objects.Line.Color = color
                         objects.Line.Thickness = 1
-                        objects.Line.From = Vector2.new(Workspace.CurrentCamera.ViewportSize.X / 2, Workspace.CurrentCamera.ViewportSize.Y)
-                        objects.Line.To = Vector2.new(pos.X, pos.Y)
                     else
                         objects.Line.Visible = false
                     end
-                    
-                    if _G.SkeletonESP then
-                        UpdateSkeletonESP(player, objects)
+
+                    -- Health Bar ESP
+                    if _G.HealthESP then
+                        local healthPercent = hum.Health / hum.MaxHealth
+                        local barHeight = height * healthPercent
+                        local barColor = Color3.fromHSV(healthPercent * 0.3, 1, 1) -- Red to Green
+                        
+                        objects.HealthBarOutline.Visible = true
+                        objects.HealthBarOutline.From = Vector2.new(xPos - 5, yPos)
+                        objects.HealthBarOutline.To = Vector2.new(xPos - 5, yPos + height)
+                        objects.HealthBarOutline.Color = Color3.new(0, 0, 0)
+                        objects.HealthBarOutline.Thickness = 3
+                        
+                        objects.HealthBar.Visible = true
+                        objects.HealthBar.From = Vector2.new(xPos - 5, yPos + height)
+                        objects.HealthBar.To = Vector2.new(xPos - 5, yPos + height - barHeight)
+                        objects.HealthBar.Color = barColor
+                        objects.HealthBar.Thickness = 1
                     else
-                        for _, line in pairs(objects.Skeleton) do
-                            line.Visible = false
-                        end
+                        objects.HealthBar.Visible = false
+                        objects.HealthBarOutline.Visible = false
+                    end
+
+                    -- Name & Distance ESP
+                    local dist = math.floor((root.Position - GetRootPart().Position).Magnitude)
+                    objects.Name.Visible = true
+                    objects.Name.Text = player.Name
+                    objects.Name.Size = 14
+                    objects.Name.Center = true
+                    objects.Name.Outline = true
+                    objects.Name.Color = Color3.new(1, 1, 1)
+                    objects.Name.Position = Vector2.new(headPos.X, headPos.Y - 30)
+
+                    objects.Distance.Visible = true
+                    objects.Distance.Text = "[" .. dist .. "m]"
+                    objects.Distance.Size = 12
+                    objects.Distance.Center = true
+                    objects.Distance.Outline = true
+                    objects.Distance.Color = Color3.new(1, 1, 1)
+                    objects.Distance.Position = Vector2.new(headPos.X, headPos.Y - 15)
+
+                    -- Skeleton ESP
+                    if _G.SkeletonESP then UpdateSkeletonESP(player, objects) else
+                        for _, line in pairs(objects.Skeleton) do line.Visible = false end
                     end
                 else
                     if ESP_Objects[player] then
-                        ESP_Objects[player].Box.Visible = false
-                        ESP_Objects[player].Line.Visible = false
-                        for _, line in pairs(ESP_Objects[player].Skeleton) do
-                            line.Visible = false
-                        end
+                        local o = ESP_Objects[player]
+                        o.Line.Visible = false o.HealthBar.Visible = false o.HealthBarOutline.Visible = false
+                        o.Distance.Visible = false o.Name.Visible = false
+                        for _, l in pairs(o.Corners) do l.Visible = false end
+                        for _, l in pairs(o.Skeleton) do l.Visible = false end
                     end
                 end
             else
                 ClearESP(player)
+                RemoveESPForPlayer(player)
             end
         end
     end
@@ -372,46 +456,57 @@ function UpdateSkeletonESP(player, objects)
     local character = player.Character
     if not character then return end
     
-    local joints = {
-        {"Head", "UpperTorso"},
-        {"UpperTorso", "LowerTorso"},
-        {"UpperTorso", "LeftUpperArm"},
-        {"LeftUpperArm", "LeftLowerArm"},
-        {"UpperTorso", "RightUpperArm"},
-        {"RightUpperArm", "RightLowerArm"},
-        {"LowerTorso", "LeftUpperLeg"},
-        {"LeftUpperLeg", "LeftLowerLeg"},
-        {"LowerTorso", "RightUpperLeg"},
-        {"RightUpperLeg", "RightLowerLeg"},
-    }
+    local isR15 = character:FindFirstChild("UpperTorso") ~= nil
+    local joints = {}
     
-    if objects.Skeleton then
-        for _, line in pairs(objects.Skeleton) do
-            pcall(function() line.Visible = false end)
-        end
-        objects.Skeleton = {}
+    if isR15 then
+        joints = {
+            {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+            {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+            {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+            {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+            {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"}
+        }
+    else
+        joints = {
+            {"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+            {"Torso", "Left Leg"}, {"Torso", "Right Leg"}
+        }
     end
     
+    -- Reuse or Create lines to prevent memory leaks
     local color = GetESPColor(player)
+    local skeletonLines = objects.Skeleton
     
     for i, joint in pairs(joints) do
         local part1 = character:FindFirstChild(joint[1])
         local part2 = character:FindFirstChild(joint[2])
         
-        if part1 and part2 and part1:IsA("BasePart") and part2:IsA("BasePart") then
+        if part1 and part2 then
             local pos1, onScreen1 = Workspace.CurrentCamera:WorldToViewportPoint(part1.Position)
             local pos2, onScreen2 = Workspace.CurrentCamera:WorldToViewportPoint(part2.Position)
             
             if onScreen1 and onScreen2 then
-                local line = Drawing.new("Line")
+                if not skeletonLines[i] then
+                    skeletonLines[i] = Drawing.new("Line")
+                end
+                local line = skeletonLines[i]
                 line.Visible = true
                 line.Color = color
-                line.Thickness = 1.5
+                line.Thickness = 1.2
                 line.From = Vector2.new(pos1.X, pos1.Y)
                 line.To = Vector2.new(pos2.X, pos2.Y)
-                table.insert(objects.Skeleton, line)
+            elseif skeletonLines[i] then
+                skeletonLines[i].Visible = false
             end
+        elseif skeletonLines[i] then
+            skeletonLines[i].Visible = false
         end
+    end
+    
+    -- Hide unused lines
+    for i = #joints + 1, #skeletonLines do
+        skeletonLines[i].Visible = false
     end
 end
 
@@ -3145,38 +3240,50 @@ local function StartFly()
         if _G.Fly and root and root.Parent and hum then
             local cam = workspace.CurrentCamera
             local speed = Config.FlySpeed or 100
-            local moveVec = Vector3.new(0,0,0)
+            local moveVec = Vector3.new(0, 0, 0)
             
-            -- Memperbaiki arah yang terbalik sesuai laporan pengguna (Dibalik)
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVec = moveVec + cam.CFrame.LookVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVec = moveVec - cam.CFrame.LookVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVec = moveVec - cam.CFrame.RightVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVec = moveVec + cam.CFrame.RightVector end
-            
-            if moveVec.Magnitude == 0 and hum.MoveDirection.Magnitude > 0 then
-                local joyDir = hum.MoveDirection
-                -- Memperbaiki arah joystick yang terbalik (Dibalik)
-                moveVec = (cam.CFrame.LookVector * joyDir.Z) + (cam.CFrame.RightVector * joyDir.X)
+            -- Logika Pergerakan (Standard Roblox Camera-Relative)
+            -- Maju/Mundur
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveVec = moveVec + cam.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveVec = moveVec - cam.CFrame.LookVector
+            end
+            -- Kiri/Kanan
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveVec = moveVec - cam.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveVec = moveVec + cam.CFrame.RightVector
             end
             
+            -- Support Joystick / Mobile
+            if hum.MoveDirection.Magnitude > 0 then
+                moveVec = hum.MoveDirection
+            end
+            
+            -- Atas/Bawah
             local yVel = 0
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) or hum.Jump then
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
                 yVel = speed
             elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
                 yVel = -speed
             end
 
-            local finalVel = (moveVec.Unit * speed)
-            if moveVec.Magnitude == 0 then
-                bodyVel.Velocity = Vector3.new(0, yVel, 0)
+            -- Hitung Kecepatan Akhir
+            if moveVec.Magnitude > 0 then
+                bodyVel.Velocity = (moveVec.Unit * speed) + Vector3.new(0, yVel, 0)
             else
-                bodyVel.Velocity = finalVel + Vector3.new(0, yVel, 0)
+                bodyVel.Velocity = Vector3.new(0, yVel, 0)
             end
             
+            -- Rotasi mengikuti Kamera
             bodyGyro.CFrame = cam.CFrame
         else
             if _G.FlyCon then _G.FlyCon:Disconnect() end
             if hum then hum.PlatformStand = false end
+            CleanupFly(root)
         end
     end)
 end
@@ -4397,35 +4504,17 @@ ExitSection:AddButton({
 -- RENDER LOOP FOR ESP
 -- ==========================================
 RunService.RenderStepped:Connect(function()
-    if not (_G.BoxESP or _G.LineESP or _G.SkeletonESP or _G.ESP) then
-        for _, obj in pairs(ESP_Objects) do 
-            pcall(function()
-                if obj.Box then obj.Box.Visible = false end
-                if obj.Line then obj.Line.Visible = false end
-                if obj.Skeleton then
-                    for _, line in pairs(obj.Skeleton) do
-                        line.Visible = false
-                    end
-                end
-            end)
-        end
-        return
-    end
-
-    -- Update Highlight ESP
-    if _G.ESP then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character then
-                CreateESPForPlayer(p)
+    if _G.BoxESP or _G.LineESP or _G.SkeletonESP or _G.ESP or _G.HealthESP then
+        UpdateESP()
+    else
+        -- Bersihkan jika semua dimatikan
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                ClearESP(player)
+                RemoveESPForPlayer(player)
             end
         end
-    else
-        for p, hl in pairs(ESP_Highlights) do
-            RemoveESPForPlayer(p)
-        end
     end
-
-    UpdateESP()
 end)
 
 -- Click TP
