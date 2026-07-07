@@ -766,25 +766,6 @@ SummitSection:AddToggle({
 local ClimbSection = MountTab:AddSection("Climbing Helpers")
 
 ClimbSection:AddSlider({
-    Title = "Gravity",
-    Description = "Gravitasi rendah = lompat lebih tinggi, climb lebih mudah",
-    Default = 196,
-    Min = 20,
-    Max = 300,
-    Callback = function(v)
-        SetGravity(v)
-    end
-})
-
-ClimbSection:AddButton({
-    Title = "Reset Gravity (196)",
-    Callback = function()
-        SetGravity(196.2)
-        Notify("Gravity", "Reset ke 196.2")
-    end
-})
-
-ClimbSection:AddSlider({
     Title = "Walk Speed",
     Description = "Kecepatan jalan",
     Default = 16,
